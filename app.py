@@ -21,6 +21,11 @@ with st.sidebar:
     mode = {"分工 + 核验 + 返工": "verified", "仅多智能体分工": "multi", "单智能体基线": "single"}[mode_label]
     reproduce = st.checkbox("查找 GitHub 并尝试论文实验", value=True,
                               help="逐篇搜索、核对并下载作者仓库，依据 README 运行实验；缺少数据、模型或环境时说明具体原因。")
+    backend_label = st.selectbox("复现实验规划与修复", ["现有 API", "Codex CLI"],
+                               help="Codex 使用本机 CLI 的登录账户，只负责计划和兼容补丁；实验仍在 Docker 中执行。")
+    reproduction_backend = "codex" if backend_label == "Codex CLI" else "api"
+    if reproduction_backend == "codex":
+        st.caption("需安装 Codex CLI 并运行 codex login。Codex 单独消耗账户额度，不计入 DeepSeek 20 元预算；每次流程最多调用 10 次。")
     samples = st.slider("实验目标样本数", 1, 6, 3, disabled=not reproduce,
                         help="尽量选择原数据中的小规模子集；仅在原脚本可控制样本数时生效。")
     model = st.text_input("模型名称（留空自动选择）", value="")
@@ -40,7 +45,8 @@ if start:
                       "reproducer": "处理实验复现", "reporter": "生成有引用的阅读报告", "single_reader": "完成单智能体阅读"}
             def progress(node, values):
                 st.write("✓ " + labels.get(node, node))
-            state, output = run(settings, selected, question, mode, max_repairs, reproduce, samples, progress)
+            state, output = run(settings, selected, question, mode, max_repairs, reproduce, samples, progress,
+                                reproduction_backend=reproduction_backend)
             st.session_state["result_dir"] = str(output)
             status.update(label="阅读完成", state="complete", expanded=False)
     except Exception as error:
@@ -75,7 +81,7 @@ if complete:
                           "plan": "制定原仓库实验计划", "execute": "配置环境并执行", "repair": "依据运行日志修复", "assess": "核对结果"}
                 with st.status("正在处理论文实验", expanded=True) as status:
                     result = reproduce_saved(settings, output, samples,
-                                lambda stage, paper: st.write(f"{paper}：{labels.get(stage, stage)}"))
+                                lambda stage, paper: st.write(f"{paper}：{labels.get(stage, stage)}"), backend=reproduction_backend)
                     status.update(label="论文实验流程结束", state="complete")
                 st.rerun()
             except Exception as error:

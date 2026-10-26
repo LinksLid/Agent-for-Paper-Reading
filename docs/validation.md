@@ -70,3 +70,19 @@ ReAct 使用作者仓库自带的 `data/hotpot_dev_v1_simplified.json` 和原 `H
 真实运行暴露并解决了三类工程问题：旧 OpenAI SDK 接口不兼容；容器只读根目录下缓存应写到 tmpfs；Docker Desktop archive/cp 无法稳定读取 tmpfs 文件，改为容器内复制到挂载的产物目录。依赖失败后的修复由运行日志驱动的 LangGraph 分支完成。
 
 最终 `demo-all-papers` 的复现状态为 partial：下载5篇，完成1篇小规模原实验，其他4篇保留具体阻塞条件。完整原始命令、兼容补丁、产物和 API 用量在本地 `output/demo-all-papers/repository-experiments-*/`。历史合成数据成绩与当前原仓库结果分别保留，不混称为论文复现。
+
+## 2026-10-27：可选 Codex CLI 接入
+
+新增 `--reproduction-backend codex` 与界面「复现实验规划与修复」选项。Codex 接管原仓库计划与一次日志修复；其余阅读、搜索核对、实验模型请求和结果解释仍走现有 API，实际第三方代码仍只在 Docker 执行。
+
+本机检测到原生 CLI 0.164.0-alpha.11.1、npm CLI 0.147.0；`codex login status` 显示 ChatGPT 登录。原生 CLI 帮助与特性列表确认所需参数可用。仅检查安装和登录状态，**没有发起真实 Codex 推理或重新运行论文实验**，原有五篇实验结果没有被改写。
+
+本轮完整自动测试 **50 passed in 4.45s**。新增八项测试覆盖：嵌套 JSON Schema、API 凭据与父会话环境过滤、结构化输出和独立记账、调用上限、非法输出、错误日志脱敏、超时停止、缺数据停止及 Codex 规划/修复与 API 核对之间的路由。CLI 和 Docker 执行均为模拟，测试准确率不是论文结果。
+
+Windows 受限沙箱禁止本机回环连接，导致 Streamlit 创建事件循环时等待 socketpair，原有临时 HTTP 代理测试也被拒绝。允许本地测试所需回环连接后，使用项目缓存目录作 pytest 临时目录，全部通过：
+
+```powershell
+.venv/Scripts/python.exe -m pytest -q --basetemp=.cache/pytest-codex-final-20261027 --tb=short
+```
+
+Codex 每次流程最多调用10次，每次最多300秒；消耗自己的登录账户额度，独立保存用量，未计入 DeepSeek 20元保护账本。真实端到端 Codex 实验效果仍待恢复实验后验证，不能由离线测试推出复现能力提升或完整论文指标复现。

@@ -27,6 +27,8 @@ def main():
     read.add_argument("--mode", choices=["single", "multi", "verified"], default="verified")
     read.add_argument("--max-repairs", type=int, choices=[0, 1, 2], default=1)
     read.add_argument("--reproduce", action="store_true")
+    read.add_argument("--reproduction-backend", choices=["api", "codex"], default="api",
+                      help="原仓库实验规划与修复后端；codex 使用本机 CLI 登录账户，单独消耗额度")
     read.add_argument("--samples", type=int, choices=range(1, 7), default=3)
     read.add_argument("--model", default="")
     read.add_argument("--provider", choices=["auto", "deepseek", "tongji"], default="auto")
@@ -39,6 +41,7 @@ def main():
     repro.add_argument("--model", default="")
     repro.add_argument("--provider", choices=["auto", "deepseek", "tongji"], default="auto")
     repro.add_argument("--max-calls", type=int, default=80)
+    repro.add_argument("--reproduction-backend", choices=["api", "codex"], default="api")
     args = parser.parse_args()
     if args.command == "index":
         papers = ingest(sorted(args.paper_dir.glob("*.pdf")), ROOT / ".cache/papers")
@@ -68,9 +71,10 @@ def main():
                 paths = [p for p in paths if any(pattern.lower() in p.name.lower() for pattern in args.paper)]
             papers = ingest(paths, ROOT / ".cache/papers")
             result = run_repository_experiments(papers, llm, ROOT, output, args.samples,
-                         progress=lambda stage, paper: print(f"{paper}：{stage}", flush=True))
+                         progress=lambda stage, paper: print(f"{paper}：{stage}", flush=True), backend=args.reproduction_backend)
             print(json.dumps({"status": result["status"], "output": str(output),
-                              "downloaded": result["downloaded"], "completed": result["completed"]}, ensure_ascii=False))
+                              "downloaded": result["downloaded"], "completed": result["completed"],
+                              "codex_calls": result["codex_calls"]}, ensure_ascii=False))
         finally:
             llm.close()
     else:
@@ -78,7 +82,8 @@ def main():
         if args.paper:
             paths = [p for p in paths if any(pattern.lower() in p.name.lower() for pattern in args.paper)]
         state, output = run(settings, paths, args.question, args.mode, args.max_repairs,
-                            args.reproduce, args.samples, lambda n, _: print(f"完成节点：{n}", flush=True), args.run_id)
+                            args.reproduce, args.samples, lambda n, _: print(f"完成节点：{n}", flush=True), args.run_id,
+                            reproduction_backend=args.reproduction_backend)
         print(json.dumps({"output": str(output), "accepted": len(state["accepted"]),
                           "reproduction": state["reproduction"]["status"]}, ensure_ascii=False))
 

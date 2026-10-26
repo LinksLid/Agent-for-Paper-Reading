@@ -12,6 +12,7 @@ from pydantic import BaseModel, Field
 
 from .experiment_runtime import Broker, DockerRuntime, docker_available, safe_relative
 from .repositories import GitHub, inspect_repository, save_json
+from .codex_backend import CodexPlanner
 
 
 class ExperimentCommand(BaseModel):
@@ -120,8 +121,9 @@ def extract_metrics(output: Path, specs: list[dict], artifacts: list[str]):
     return metrics
 
 
-def build_repository_workflow(llm, github: GitHub, output: Path, samples=3, progress=None):
+def build_repository_workflow(llm, github: GitHub, output: Path, samples=3, progress=None, planner=None):
     output.mkdir(parents=True, exist_ok=True)
+    planner = planner if planner is not None else llm
 
     def checkpoint(stage, fn):
         def wrapped(state):
@@ -179,7 +181,7 @@ def build_repository_workflow(llm, github: GitHub, output: Path, samples=3, prog
                   "脚本输出不是 JSON 时 metrics=[]，保留原始输出供人工核对。"
                   "install/run/artifacts 无法确认时留空，不执行未经证实的命令。\n论文：" + state["paper"]["filename"] +
                   "\n仓库检查结果：" + json.dumps(state["inventory"], ensure_ascii=False))
-        result = llm.structured("复现/原仓库实验规划", prompt, ExperimentPlan, max_tokens=6500)
+        result = planner.structured("复现/原仓库实验规划", prompt, ExperimentPlan, max_tokens=6500)
         save_json(output / "plan.json", result.model_dump())
         if result.runnable and (not result.run or result.missing_requirements):
             result = result.model_copy(update={"runnable": False, "scope": "blocked",
@@ -228,7 +230,7 @@ def build_repository_workflow(llm, github: GitHub, output: Path, samples=3, prog
                   json.dumps(state["plan"], ensure_ascii=False) + "\n失败命令：" +
                   json.dumps(state.get("commands", [])[-1:], ensure_ascii=False)[-10000:] +
                   "\n仓库：" + json.dumps(state["inventory"], ensure_ascii=False))
-        revised = llm.structured("复现/根据运行错误修复", prompt, ExperimentPlan, max_tokens=6500)
+        revised = planner.structured("复现/根据运行错误修复", prompt, ExperimentPlan, max_tokens=6500)
         validate_plan(revised, state["inventory"])
         save_json(output / "repaired_plan.json", revised.model_dump())
         return {"plan": revised.model_dump(), "attempts": state.get("attempts", 0) + 1,
@@ -265,8 +267,11 @@ def build_repository_workflow(llm, github: GitHub, output: Path, samples=3, prog
     return graph.compile()
 
 
-def run_repository_experiments(papers, llm, root: Path, output: Path, samples=3, progress=None):
+def run_repository_experiments(papers, llm, root: Path, output: Path, samples=3, progress=None, backend="api"):
+    if backend not in {"api", "codex"}:
+        raise ValueError("实验规划后端必须是 api 或 codex")
     output.mkdir(parents=True, exist_ok=True)
+    planner = CodexPlanner(output / "codex") if backend == "codex" else llm
     github = GitHub(root)
     results = []
     started = time.monotonic()
@@ -274,7 +279,8 @@ def run_repository_experiments(papers, llm, root: Path, output: Path, samples=3,
         for paper in papers:
             first_record = len(llm.records)
             folder = output / paper["paper_id"]
-            graph = build_repository_workflow(llm, github, folder, samples, progress)
+            first_codex_record = len(planner.records) if backend == "codex" else 0
+            graph = build_repository_workflow(llm, github, folder, samples, progress, planner=planner)
             (folder / "workflow.mmd").write_text(graph.get_graph().draw_mermaid(), encoding="utf-8")
             state = graph.invoke({"paper": paper, "events": []})
             result = {"paper_id": paper["paper_id"], "filename": paper["filename"], "status": state["status"],
@@ -284,7 +290,9 @@ def run_repository_experiments(papers, llm, root: Path, output: Path, samples=3,
                       "commands": state.get("commands", []), "artifacts": state.get("artifacts", []),
                       "artifact_root": state.get("artifact_root"), "repair_attempts": state.get("attempts", 0),
                       "metrics": state.get("metrics", []), "assessment": state.get("assessment"),
-                      "events": state["events"], "full_paper_reproduced": False}
+                      "events": state["events"], "full_paper_reproduced": False,
+                      "planning_backend": backend,
+                      "codex_calls": len(planner.records) - first_codex_record if backend == "codex" else 0}
             result["experiment_models"] = list({(r["provider"], r["model"]): {"provider": r["provider"], "model": r["model"]}
                                                  for r in llm.records[first_record:] if r.get("agent") == "原仓库实验/API" and r.get("status") == "ok"}.values())
             save_json(folder / "result.json", result)
@@ -300,6 +308,7 @@ def summarize(results, started):
     status = "completed" if completed == len(results) and results else "partial" if completed else "failed" if any(r["status"] == "failed" for r in results) else "blocked"
     return {"kind": "repository_experiments", "status": status, "papers": results,
             "downloaded": sum(bool(r.get("commit")) for r in results), "completed": completed,
+            "codex_calls": sum(r.get("codex_calls", 0) for r in results),
             "seconds": round(time.monotonic() - started, 3), "full_paper_reproduced": False}
 
 
@@ -322,6 +331,8 @@ def reproduction_markdown(result):
             lines.append(f"- 已下载源码提交：`{paper['commit']}`。")
         if paper.get("scope"):
             lines.append("- 本次计划范围：`" + paper["scope"] + "`。")
+        if paper.get("planning_backend"):
+            lines.append("- 规划与修复后端：" + ("Codex CLI" if paper["planning_backend"] == "codex" else "现有 API") + "。")
         if paper.get("reason"):
             lines.append("- 当前情况：" + paper["reason"])
         for missing in (paper.get("plan") or {}).get("missing_requirements", []):

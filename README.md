@@ -44,6 +44,29 @@ API_TIMEOUT=120
 
 `--samples` 是目标样本数，仅在原实验入口可控制样本量时生效。不会生成玩具数据凑样本。
 
+## 可选：让复现 Agent 调用 Codex
+
+在界面「复现实验规划与修复」选择 **Codex CLI**，或使用：
+
+```powershell
+# 首次在本机安装官方 Codex CLI 并登录；已有登录可直接复用
+codex login
+codex login status
+.venv/Scripts/python.exe -m paperteam reproduce --paper ReAct --samples 2 --reproduction-backend codex
+# 阅读工作流中也可启用
+.venv/Scripts/python.exe -m paperteam read --paper ReAct --reproduce --reproduction-backend codex
+```
+
+LangGraph 仍负责角色、状态、分支和返工；Codex 是复现 Agent 的代码工具，接管「制定实验计划」与「按真实错误修复计划」两个节点。搜索核对、论文阅读、结果解释和原实验中的模型请求仍使用现有 API。实验命令与兼容补丁先通过原文依据和路径校验，再交给 Docker 执行；Codex 无法直接在宿主机运行论文代码。
+
+通过官方 `codex exec` 的非交互模式、JSON Schema 输出和只读沙箱接入。仅向它提供已检查的仓库片段与必要日志，不传入 `.env` 内容；禁用此次调用的命令工具、插件、子任务、搜索和用户配置加载。认证复用 CLI 自己的缓存登录，模型使用忽略用户配置后的 CLI 默认值。当前支持原生 CLI，包括官方 npm 的 Windows 安装布局。需要支持 `--ignore-user-config`、`--ephemeral`、`--output-schema` 的 CLI 版本；本机检测到的原生 CLI 为 0.164.0-alpha.11.1，npm CLI 为 0.147.0，运行时优先原生程序。
+
+**Codex 用量不属于 DeepSeek 20元预算。** ChatGPT 登录使用对应 Codex 账户额度；API 凭据登录按该账户规则计费。每次流程最多 10 次 Codex 调用，每次超时 300 秒，初始计划与最多一次修复分别计数；`--max-calls` 仍仅约束现有 API。Codex 不可用、超时或结构校验失败时记录失败，不静默切换后端。用量元数据保存在实验输出的 `codex/codex_usage.jsonl`，结果中分别记录 `planning_backend`、`codex_calls` 和原实验实际使用的模型。
+
+接入 Codex 可以辅助代码分析和依赖兼容，不能补足未提供的数据、权重、GPU，也不代表获得论文原模型或完整复现指标。默认仍使用现有 API；新增开关不会自动启动实验。接入测试使用模拟 CLI 和容器，不把测试夹具结果当真实实验。
+
+接口依据：[OpenAI Docs：非交互运行](https://learn.chatgpt.com/docs/non-interactive-mode)、[认证与账户用量](https://learn.chatgpt.com/docs/auth)。
+
 ## 工作流
 
 阅读：PDF 按页索引 → 规划 → 方法/实验并行分析 → 原文定位与语义核验 → 定向补查 → 逐篇实验 → 报告与比较结论核验。

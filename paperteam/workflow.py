@@ -144,7 +144,7 @@ def render_report(title, state, comparisons, questions, llm):
 
 
 def build_workflow(llm: LLM, root: Path, run_dir: Path, checkpointer=None,
-                   mode="verified", max_repairs=1, reproduce=False, samples=3):
+                   mode="verified", max_repairs=1, reproduce=False, samples=3, reproduction_backend="api"):
     def ingest_node(state):
         papers = ingest([Path(p) for p in state["paths"]], root / ".cache/papers")
         return {"papers": papers, "events": event("ingest", papers=len(papers))}
@@ -223,9 +223,11 @@ def build_workflow(llm: LLM, root: Path, run_dir: Path, checkpointer=None,
         if not reproduce:
             return {"reproduction": {"status": "disabled"}, "events": event("reproducer", status="disabled")}
         try:
-            result = run_repository_experiments(state["papers"], llm, root, run_dir / "reproduction", samples=samples)
+            result = run_repository_experiments(state["papers"], llm, root, run_dir / "reproduction", samples=samples,
+                                                backend=reproduction_backend)
         except Exception as error:
-            result = {"status": "failed", "reason": f"仓库实验流程未完成（{type(error).__name__}），详见 reproduction 目录。"}
+            reason = str(error) if isinstance(error, (ValueError, RuntimeError)) else type(error).__name__
+            result = {"status": "failed", "reason": "仓库实验流程未完成：" + reason}
         return {"reproduction": result, "events": event("reproducer", status=result["status"])}
 
     def report_node(state):

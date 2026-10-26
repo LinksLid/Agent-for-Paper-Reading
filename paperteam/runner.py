@@ -18,7 +18,7 @@ from .repository_experiments import run_repository_experiments, reproduction_mar
 
 
 def run(settings: Settings, paths: list[Path], question: str, mode="verified", max_repairs=1,
-        reproduce=False, samples=3, progress=None, run_id="") -> tuple[dict, Path]:
+        reproduce=False, samples=3, progress=None, run_id="", reproduction_backend="api") -> tuple[dict, Path]:
     if not paths or not question.strip():
         raise ValueError("请选择论文并填写阅读问题。")
     if mode not in {"single", "multi", "verified"} or not 0 <= max_repairs <= 2:
@@ -34,7 +34,8 @@ def run(settings: Settings, paths: list[Path], question: str, mode="verified", m
         llm.choose_model()
         with closing(sqlite3.connect(run_dir / "checkpoints.sqlite", check_same_thread=False)) as connection:
             saver = SqliteSaver(connection)
-            graph = build_workflow(llm, settings.root, run_dir, saver, mode, max_repairs, reproduce, samples)
+            graph = build_workflow(llm, settings.root, run_dir, saver, mode, max_repairs, reproduce, samples,
+                                   reproduction_backend=reproduction_backend)
             (run_dir / "workflow.mmd").write_text(graph.get_graph().draw_mermaid(), encoding="utf-8")
             config = {"configurable": {"thread_id": run_id}, "recursion_limit": 40}
             initial = {"question": question.strip(), "paths": [str(p.resolve()) for p in paths], "events": []}
@@ -49,6 +50,8 @@ def run(settings: Settings, paths: list[Path], question: str, mode="verified", m
                     "question": question, "papers": [{k: p[k] for k in ("filename", "paper_id", "sha256", "pages")}
                                                       for p in state["papers"]],
                     "max_repairs": max_repairs, "reproduce": reproduce,
+                    "reproduction_backend": reproduction_backend,
+                    "codex_calls": state["reproduction"].get("codex_calls", 0),
                     "api_calls": llm.calls, "seconds": round(time.monotonic() - started, 3),
                     "accepted_claims": len(state["accepted"]), "rejected_claims": len(state["rejected"]),
                     "review_rounds": state["review_round"], "reproduction_status": state["reproduction"]["status"],
@@ -63,7 +66,7 @@ def run(settings: Settings, paths: list[Path], question: str, mode="verified", m
         llm.close()
 
 
-def reproduce_saved(settings: Settings, run_dir: Path, samples=3, progress=None):
+def reproduce_saved(settings: Settings, run_dir: Path, samples=3, progress=None, backend="api"):
     run_dir = run_dir.resolve()
     if not run_dir.is_relative_to((settings.root / "output").resolve()):
         raise ValueError("只能对当前项目的阅读结果执行复现")
@@ -72,12 +75,14 @@ def reproduce_saved(settings: Settings, run_dir: Path, samples=3, progress=None)
     folder = run_dir / ("repository-experiments-" + datetime.now().strftime("%Y%m%d-%H%M%S"))
     llm = LLM(settings, folder)
     try:
-        result = run_repository_experiments(state["papers"], llm, settings.root, folder, samples, progress)
+        result = run_repository_experiments(state["papers"], llm, settings.root, folder, samples, progress, backend=backend)
         state["reproduction"] = result
         section = "## 实验复现\n\n" + "\n".join(reproduction_markdown(result)) + "\n"
         state["report"] = re.sub(r"## 实验复现\n.*?(?=\n## |\Z)", lambda _: section, state["report"], flags=re.S)
         manifest["reproduce"] = True
         manifest["reproduction_status"] = result["status"]
+        manifest["reproduction_backend"] = backend
+        manifest["codex_calls"] = manifest.get("codex_calls", 0) + result.get("codex_calls", 0)
         manifest["reproduction_output"] = str(folder)
         manifest["reproduction_seconds"] = result["seconds"]
         manifest["api_calls"] += llm.calls
