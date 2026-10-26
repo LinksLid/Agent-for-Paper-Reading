@@ -1,10 +1,9 @@
 {
-  "validation_date": "2026-10-27",
+  "date": "2026-10-27",
   "kind": "repository_experiments",
   "status": "partial",
   "downloaded": 5,
-  "completed": 1,
-  "seconds": 97.297,
+  "completed": 2,
   "full_paper_reproduced": false,
   "papers": [
     {
@@ -14,22 +13,20 @@
       "status": "blocked",
       "stage": "plan",
       "scope": "blocked",
-      "reason": "仓库提供了原实验入口 src/main.py 与 run/run_main_ir_cg_ut.sh，但运行 CHESS 全流程需要 BIRD dev 数据库目录（DB_ROOT_DIRECTORY 指向 ./data/dev/dev_databases）以及 dev_tables.json，而仓库文件清单中只有 data/dev/sub_sampled_bird_dev_set.json，没有 dev_databases 与 dev_tables.json；同时预处理脚本 run_preprocess.sh 依赖这些数据库目录。缺少数据库文件时无法执行原实验的 SQL 执行、schema 读取与评估，因此 runnable=false。",
+      "reason": "真实 BIRD 开发集前6条及对应数据库已提供，但原 CHESS 信息检索依赖 text-embedding-3-large embedding 服务。临时代理不支持 embedding，挂载数据中也没有预生成检索索引，因此无法保留原算法完成生成与执行准确率评估。",
       "metrics": [],
-      "repair_attempts": 0,
+      "experiment_models": [],
+      "planning_backend": "codex",
+      "codex_calls": 1,
       "missing_requirements": [
-        "缺少 BIRD dev 数据库目录：README 要求 DB_ROOT_DIRECTORY=\"./data/dev/dev_databases\"，仓库文件清单中不存在该目录，导致 DatabaseManager 无法加载 SQLite 数据库、无法执行 SQL 与评估。位置：README.md 环境配置段与 src/runner/database_manager.py。",
-        "缺少 dev_tables.json：README 要求 DATA_TABLES_PATH=\"./data/dev/dev_tables.json\"，仓库文件清单中不存在该文件。位置：README.md 环境配置段。",
-        "缺少 dev.json 完整开发集：README 要求 DATA_PATH=\"./data/dev/dev.json\"，仓库仅有 data/dev/sub_sampled_bird_dev_set.json。位置：README.md 环境配置段。",
-        "预处理依赖数据库目录：run/run_preprocess.sh 使用 db_root_directory=$DB_ROOT_DIRECTORY 并调用 src/preprocess.py，缺少数据库目录时无法生成 minhash/LSH/向量库。位置：run/run_preprocess.sh 与 src/preprocess.py。",
-        "缺少 .env 实际配置：仓库仅有 dotenv_copy 与 env.example，需按 README 创建 .env 并填入 OPENAI_API_KEY 等；API 密钥可由临时代理环境变量提供，但数据库路径仍需真实数据。位置：README.md 环境配置段。"
+        "缺少原方法所需的 text-embedding-3-large embedding 服务：src/database_utils/db_catalog/preprocess.py 中 EMBEDDING_FUNCTION = OpenAIEmbeddings(model=\"text-embedding-3-large\")，Chroma.from_documents 使用该服务创建目录向量索引；临时代理明确不支持 embedding，external_services 也未提供可用的替代访问。",
+        "当前 california_schools 挂载数据未提供 context_vector_db 或 preprocessed 检索索引。MinHash 索引可由原预处理脚本生成，但向量索引生成受上述 embedding 服务缺失阻塞；src/runner/database_manager.py 的 query_vector_db 还需要同一 embedding 函数进行查询，单独补充离线向量索引不足以解除阻塞。"
       ],
       "differences_from_paper": [
-        "原实验在 BIRD dev 全量数据库上运行；当前仓库缺少 dev_databases 与 dev_tables.json，无法执行原实验，计划最多 2 个真实样本也无法落地。",
-        "论文报告 BIRD test 集 71.10% 准确率等指标，但仓库未提供 test 集数据库与评估脚本入口，无法在本环境复现该指标。",
-        "results/readme.md 说明 LLM 非确定性会导致结果不完全一致，即使补齐数据也不能保证与论文数值相同。"
+        "可用数据限定为官方 BIRD 开发集前6条，均来自 california_schools，不能代表完整开发集或论文测试集结果。",
+        "本次没有执行实验或产出指标。禁用目录检索、替换 embedding 模型或使用其他任务数据都会改变原实验，未采用这些方案。"
       ],
-      "commands": []
+      "completion_continuation": false
     },
     {
       "filename": "KnowTrans- Boosting Transferability of Data Preparation LLMs via Knowledge Augmentation.pdf",
@@ -38,45 +35,78 @@
       "status": "blocked",
       "stage": "plan",
       "scope": "blocked",
-      "reason": "仓库只包含 KnowTrans 的推理/知识增强代码（src/run_DP.py、src/run_infer.py、src/AKB/*）以及被修改的 peft 副本，未包含 LLaMA-Factory 训练框架、Jellyfish-7B 基座权重、LoRA 适配器权重和 Jellyfish-Instruct 数据集；README 明确要求先安装 LLaMA-Factory 并从 HuggingFace 下载数据集，且推理入口依赖 vLLM 与 GPU。当前 CPU 容器 4GB 内存、无 GPU、未挂载数据与权重，无法执行原实验入口，故 runnable=false。",
+      "reason": "提供的材料不足以制定可核验的最多6个真实样本实验。原实验需要本地DP-LLM及LoRA权重，文件清单未包含这些权重或实验数据；当前CPU、4GB内存环境无法承载README所述Jellyfish-7B训练与推理。临时OpenAI代理不能替代SKC训练后的模型及适配器。关键配置、模型调用代码和完整评估输出代码未提供，无法确认API兼容补丁、样本上限或实际指标产物。",
       "metrics": [],
-      "repair_attempts": 0,
+      "experiment_models": [],
+      "planning_backend": "codex",
+      "codex_calls": 1,
       "missing_requirements": [
-        "LLaMA-Factory 训练框架未包含在仓库中，README 要求先安装（README.md: 'Install the LLM training framework [LLaMA-Factory](https://github.com/hiyouga/LLaMA-Factory).'），位置：仓库根目录缺失该依赖",
-        "Jellyfish-Instruct 数据集未挂载，README 要求从 HuggingFace 下载（README.md: 'Download datasets from [Jellyfish Benchmark](https://huggingface.co/datasets/NECOUDBFM/Jellyfish-Instruct).'），位置：./data 目录不存在",
-        "Jellyfish-7B 基座模型权重与 LoRA 适配器权重未提供，run_infer.py 需要 --model_weights 与 --lora_weights（scripts/upstream-train-7B/inference.sh 中为 '/home/yhge/pre-train/Jellyfish-7B' 与 'jellyfish-rag/outputs/7B/few-shot-train20'），位置：本地路径不存在",
-        "推理入口依赖 vLLM 与 GPU（README.md: '--enable_vllm'；requirements.txt 含 vllm==0.5.3.post1），当前容器无 GPU，位置：src/run_infer.py 的 vLLM 推理路径",
-        "src/run_DP.py 依赖 src/AKB/configs/DP.yaml 与 src/load_data.py 加载的数据文件，数据文件未提供，位置：src/AKB/configs/DP.yaml 引用的数据路径"
+        "缺少原实验DP-LLM基础权重和相应训练完成的LoRA适配器。README.md的--model、--lora、--model_weights、--lora_weights均为占位路径；scripts/upstream-train-7B/inference.sh引用/home/yhge/pre-train/Jellyfish-7B和jellyfish-rag/outputs/7B/few-shot-train20，均未随所列文件提供。",
+        "缺少可核验的数据下载与加载对应信息：未提供src/load_data.py、src/data_utils/prepare.py正文及具体数据划分，无法确认从README所链公开数据集取得适用的最多6条真实样本并保留原标签。",
+        "缺少src/AKB/configs/DP.yaml、src/AKB/llm.py和src/run_infer.py正文，无法核实生成与评估模型后端、代理接入方式及CPU执行路径。",
+        "src/run_DP.py提供内容截断于infer函数内部，src/AKB/evaluation/f1_score.py截断于_compute_avg_f1定义，无法确认完整原评估流程、产物格式及合法的JSON指标键。",
+        "缺少运行原本地模型实验的计算资源：README描述Jellyfish-7B，scripts/upstream-train-7B/inference.sh申请GPU并启用vLLM；当前没有GPU且仅4GB内存，不能据现有材料确认可行的等价执行方案。"
       ],
       "differences_from_paper": [
-        "无法复现论文 13 数据集上的 4.93% 平均提升结论：缺少数据集、基座权重与 LoRA 权重",
-        "无法执行 SKC 训练阶段：LLaMA-Factory 与训练脚本依赖的 GPU 环境不可用",
-        "无法执行 AKB 推理阶段：vLLM 需要 GPU，且模型权重缺失"
+        "当前未能执行SKC训练、AKB知识生成与精炼或原测试集评估，因此没有可与论文比较的实验结果。",
+        "目标最多6个真实样本，属于拟议的小规模验证；论文README描述在13个数据集上的实验，当前尚不具备实施该子集验证的条件。"
       ],
-      "commands": []
+      "completion_continuation": false
     },
     {
       "filename": "MAC-SQL：A Multi-Agent Collaborative Framework for Text-to-SQL.pdf",
       "repository": "https://github.com/wbbeyourself/MAC-SQL",
       "commit": "31a9df5e0d520be4769be57a4b9022e5e34a14f4",
-      "status": "blocked",
-      "stage": "plan",
-      "scope": "blocked",
-      "reason": "仓库只包含代码与脚本，README 明确要求下载外部 data.zip（BIRD/Spider 数据库与 dev.json 等）并替换 data 目录，当前环境未挂载任何用户数据集，仓库文件清单中也没有 data/ 目录或任何 .sqlite 数据库、dev.json、dev_gold.sql、dev_tables.json。run.py 的 check_all_paths 会在输入文件、数据库路径、tables.json 缺失时直接抛 FileNotFoundError，因此无法用真实数据执行原实验入口；同时 run.py 依赖 core/chat_manager.py 与 core/agents.py 的多智能体流程调用 OpenAI 兼容接口，虽可用临时代理，但缺少数据是硬缺口。",
-      "metrics": [],
-      "repair_attempts": 0,
-      "missing_requirements": [
-        "仓库缺少 data/ 目录及 BIRD 数据文件：./data/bird/dev.json、./data/bird/dev_gold.sql、./data/bird/dev_tables.json、./data/bird/dev_databases/<db_id>/<db_id>.sqlite（run.sh 与 evaluation_bird_ex_ves.sh 中引用的路径），需从 README 所述 data.zip 获取并挂载",
-        "仓库缺少 Spider 数据文件：./data/spider/dev.json、./data/spider/dev_gold.sql、./data/spider/tables.json、./data/spider/database（run.sh 中引用的路径）",
-        "仓库缺少 run.sh 环境自检所用的 ./data/foo/test.json、./data/foo/test_databases、./data/foo/test_tables.json，无法执行原仓库的 smoke 入口",
-        "core/chat_manager.py 与 core/agents.py 未在提供的仓库内容中给出正文，无法确认其调用方式与是否兼容 OpenAI 兼容代理（仅知 README 称使用 openai==0.28.1 与 openai.ChatCompletion.create）"
+      "status": "completed",
+      "stage": "assess",
+      "scope": "benchmark_subset",
+      "reason": "",
+      "metrics": [
+        {
+          "name": "execution_accuracy",
+          "artifact": "outputs/bird_subset/eval_result_dev.json",
+          "json_path": "res",
+          "aggregate": "mean",
+          "value": 0.6666666666666666,
+          "sample_count": 30,
+          "provenance": "artifacts/outputs/bird_subset/eval_result_dev.json"
+        },
+        {
+          "name": "correct",
+          "artifact": "outputs/bird_subset/eval_result_dev.json",
+          "json_path": "res",
+          "aggregate": "sum",
+          "value": 20,
+          "sample_count": 30,
+          "provenance": "artifacts/outputs/bird_subset/eval_result_dev.json"
+        },
+        {
+          "name": "samples",
+          "artifact": "outputs/bird_subset/eval_result_dev.json",
+          "json_path": "res",
+          "aggregate": "count",
+          "value": 30,
+          "sample_count": 30,
+          "provenance": "artifacts/outputs/bird_subset/eval_result_dev.json"
+        }
       ],
+      "experiment_models": [
+        {
+          "provider": "deepseek",
+          "model": "deepseek-flash"
+        }
+      ],
+      "planning_backend": "codex",
+      "codex_calls": 0,
+      "missing_requirements": [],
       "differences_from_paper": [
-        "未执行任何生成或评估：缺少 BIRD/Spider 真实数据与数据库，无法运行 run.py 与 evaluation_bird_ex.py / evaluation_bird_ves.py",
-        "原论文在 BIRD dev（1534 条）与 Spider dev（1034 条）上评估；即使补齐数据，本计划上限为 2 个真实样本，指标不可与论文数值直接比较",
-        "原实验默认使用 gpt-4-1106-preview 或 SQL-Llama 本地端点；本环境仅能通过 OpenAI 兼容临时代理（非流式 chat/completions），不支持工具调用、embedding 与视觉，与原设置存在差异"
+        "模型请求经框架临时代理转发；实际模型是否与原仓库默认 gpt-4-1106-preview 一致需以代理实际配置为准。",
+        "本次仅评估EX，不运行VES、Spider或SQL-Llama训练及本地部署。",
+        "EX汇总由原脚本打印，JSON保存逐样本res；不将逐样本结果冒充汇总指标，metrics留空。",
+        "使用Python 3.10，原README环境示例为Python 3.9。",
+        "本次目标为 30 个真实样本；仍为子集实验，不是论文完整指标复现。"
       ],
-      "commands": []
+      "completion_continuation": false
     },
     {
       "filename": "ReAct- Synergizing Reasoning and Acting in Language Models.pdf",
@@ -88,67 +118,49 @@
       "reason": "",
       "metrics": [
         {
-          "name": "HotpotQA EM (2 samples)",
-          "artifact": "hotpotqa_results.json",
-          "json_path": "em_mean",
-          "value": 0.0,
-          "provenance": "artifacts/hotpotqa_results.json"
+          "name": "success_rate",
+          "artifact": "alfworld_results.json",
+          "json_path": "success_rate",
+          "aggregate": null,
+          "value": 0.16666666666666666,
+          "provenance": "artifacts/alfworld_results.json"
         },
         {
-          "name": "HotpotQA EM 计数",
-          "artifact": "hotpotqa_results.json",
-          "json_path": "em_sum",
-          "value": 0,
-          "provenance": "artifacts/hotpotqa_results.json"
+          "name": "successes",
+          "artifact": "alfworld_results.json",
+          "json_path": "successes",
+          "aggregate": null,
+          "value": 1,
+          "provenance": "artifacts/alfworld_results.json"
+        },
+        {
+          "name": "episodes",
+          "artifact": "alfworld_results.json",
+          "json_path": "episodes",
+          "aggregate": null,
+          "value": 6,
+          "provenance": "artifacts/alfworld_results.json"
         }
       ],
-      "repair_attempts": 0,
+      "experiment_models": [
+        {
+          "provider": "deepseek",
+          "model": "deepseek-flash"
+        }
+      ],
+      "planning_backend": "codex",
+      "codex_calls": 0,
       "missing_requirements": [],
       "differences_from_paper": [
-        "样本数由 500 降为 2，指标不具备与论文表格可比性。",
-        "模型由 text-davinci-002 替换为临时代理提供的兼容模型，输出分布可能与论文不同。",
-        "Wikipedia 检索依赖实时公开网页，页面内容可能与论文实验时不同。",
-        "仅运行 HotpotQA，未运行 FEVER、ALFWorld、WebShop。"
+        "仅执行原循环中的前 6 个 episode，而非全部 134 个。",
+        "使用 ALFWorld 0.4.2 文本环境和 CPU，保留原动作循环、示例提示及环境成功判定。",
+        "保留 text-davinci-002 请求字段，但临时代理实际提供的模型可能不同于论文模型；结果须结合代理模型记录解释。",
+        "只评估 ALFWorld 子集，不报告受 Wikipedia 403 影响的 HotpotQA 或 FEVER 成绩。",
+        "依据实际安装错误校正依赖版本：alfworld==0.4.2",
+        "本次目标为 6 个真实样本；仍为子集实验，不是论文完整指标复现。",
+        "显式增加 legacy Completion 到聊天模型的续写格式 system 约束；这是提示接口兼容性对照，不是与原论文相同的模型输入。"
       ],
-      "commands": [
-        {
-          "phase": "install",
-          "argv": [
-            "/tmp/venv/bin/python",
-            "-m",
-            "pip",
-            "install",
-            "openai==0.28.0",
-            "gym",
-            "numpy<2",
-            "requests",
-            "beautifulsoup4",
-            "pyyaml",
-            "nbconvert",
-            "ipykernel"
-          ],
-          "cwd": ".",
-          "exit_code": 0,
-          "seconds": 45.469
-        },
-        {
-          "phase": "experiment",
-          "argv": [
-            "/tmp/venv/bin/python",
-            "-m",
-            "jupyter",
-            "nbconvert",
-            "--to",
-            "notebook",
-            "--execute",
-            "--inplace",
-            "hotpotqa.ipynb"
-          ],
-          "cwd": ".",
-          "exit_code": 0,
-          "seconds": 16.625
-        }
-      ]
+      "completion_continuation": true
     },
     {
       "filename": "Visual Instruction Tuning.pdf",
@@ -157,20 +169,54 @@
       "status": "blocked",
       "stage": "plan",
       "scope": "blocked",
-      "reason": "仓库中可离线执行的评估代码（如 llava/eval/eval_pope.py、eval_science_qa.py、eval_textvqa.py）都需要外部标注/预测文件，而仓库内只提供了 LLaVA-Bench 的表格数据（question/answer/review/rule）与少量 playground 提示文本，没有可直接用于这些评估脚本的完整标注与模型预测；模型推理入口（llava/eval/model_vqa.py、predict.py）需要下载 LLaVA 权重（如 llava-v1.5-13b 与 clip-vit-large-patch14-336），在 4GB CPU 容器中不可行且不允许自动下载大型模型。因此无法在不伪造数据/指标的前提下完成真实实验复现。",
+      "reason": "当前条件无法运行论文的 LLaVA 视觉推理实验。提供的推理入口需要本地多模态模型权重并显式调用 CUDA；容器只有 CPU、4GB 内存且不允许自动下载大型模型。临时代理不支持视觉，不能替代 LLaVA。仓库虽包含问题、基线答案和历史评审结果，但未确认包含与这些问题配套的 LLaVA 原始预测，不能将基线答案或历史分数当成本次复现结果。",
       "metrics": [],
-      "repair_attempts": 0,
+      "experiment_models": [],
+      "planning_backend": "codex",
+      "codex_calls": 1,
       "missing_requirements": [
-        "模型权重缺失：predict.py 中 setup 依赖下载 liuhaotian/llava-v1.5-13b 与 openai/clip-vit-large-patch14-336（predict.py 的 weights 列表），4GB CPU 容器无法加载 13B 模型，且不允许自动下载大型模型。",
-        "评估标注/预测数据缺失：llava/eval/eval_pope.py 需要 --annotation-dir 下 coco_pope_*.json 与 --result-file 预测；llava/eval/eval_science_qa.py 需要 base-dir 下 pid_splits.json、problems.json 与 --result-file；llava/eval/eval_textvqa.py 需要 --annotation-file 与 --result-file。仓库中均未提供这些文件。",
-        "LLaVA-Bench 评审需要 GPT-4 评审输出：llava/eval/eval_gpt_review_bench.py 调用 openai.ChatCompletion.create(model='gpt-4-0314')，仓库仅提供历史 review 结果（llava/eval/table/review/*.jsonl），无法在无真实密钥/无模型条件下重新生成评审分数。",
-        "容器无 GPU：llava/eval/model_vqa.py 等推理脚本使用 .cuda() 与 float16，CPU 4GB 环境无法运行 13B 视觉模型推理。"
+        "本地 LLaVA 模型及视觉编码器权重：predict.py 的 Predictor.setup 调用 load_pretrained_model(\"liuhaotian/llava-v1.5-13b\", ...)，weights 列表还要求 openai/clip-vit-large-patch14-336；当前未挂载这些权重。",
+        "足以加载并运行模型的计算资源：predict.py 的 Predictor.predict 对图像张量和 input_ids 显式调用 .cuda()；当前无 GPU，4GB 内存也不足以加载该入口使用的未量化 13B 模型。",
+        "真实评测图像及其与问题的对应关系：文件清单未包含 qa90_questions.jsonl 对应的 COCO 评测图像；llava/serve/examples 中的两张演示图不能替代评测数据。",
+        "如改为仅评估已有 LLaVA 预测，需要与问题配套的原始 LLaVA 答案文件。已列出的 llava/eval/table/answer 文件是其他模型的基线答案；历史 review 和 ScienceQA 汇总结果不能替代本次预测。"
       ],
       "differences_from_paper": [
-        "未执行任何实验；计划被阻塞，无法与论文报告的基准结果比较。",
-        "仓库提供的 LLaVA-Bench 表格数据仅为历史评审记录，不能替代论文中的完整评估流程。"
+        "未执行训练、视觉推理或评估，未生成任何指标。",
+        "所提供的 predict.py 使用 LLaVA-v1.5-13B，不能直接视为《Visual Instruction Tuning》原始版本模型的复现。",
+        "即使实验条件补齐，本次最多允许评估 6 个真实样本，不能据此复现论文的完整基准结果。"
       ],
-      "commands": []
+      "completion_continuation": false
     }
-  ]
+  ],
+  "comparisons": [
+    {
+      "task": "ReAct / ALFWorld",
+      "same_task_ids": true,
+      "episodes": 6,
+      "baseline_successes": 0,
+      "continuation_successes": 1,
+      "actual_model": [
+        {
+          "provider": "deepseek",
+          "model": "deepseek-flash"
+        }
+      ],
+      "game_names": [
+        "pick_cool_then_place_in_recep-Tomato-None-Microwave-10/trial_T20190909_102710_795182",
+        "pick_two_obj_and_place-SoapBar-None-GarbageCan-424/trial_T20190909_064221_368939",
+        "pick_cool_then_place_in_recep-Lettuce-None-CounterTop-10/trial_T20190909_174840_771703",
+        "look_at_obj_in_light-Bowl-None-DeskLamp-308/trial_T20190907_133919_856963",
+        "pick_clean_then_place_in_recep-SoapBar-None-CounterTop-424/trial_T20190907_074106_050405",
+        "pick_clean_then_place_in_recep-Plate-None-CounterTop-10/trial_T20190908_213420_728917"
+      ],
+      "change": "Explicit completion-continuation system message; original action loop and won evaluation unchanged",
+      "limitation": "One run on six tasks; compatibility comparison, not paper benchmark reproduction"
+    }
+  ],
+  "codex_calls_including_failed_attempts": 13,
+  "deepseek_conservative_budget": {
+    "limit_cny": 20.0,
+    "reserved_or_estimated_cny": 5.339484,
+    "exhausted": false
+  }
 }

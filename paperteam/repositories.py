@@ -237,8 +237,14 @@ def inspect_repository(repo: Path):
         name = Path(path).name.lower()
         if "/" not in path and name.startswith(("readme", "requirements", "environment")):
             return 100
+        if path in {"run/configs/CHESS_IR_CG_UT.yaml", "src/llm/engine_configs.py", "src/llm/models.py",
+                    "src/runner/database_manager.py", "src/database_utils/db_catalog/preprocess.py",
+                    "src/database_utils/db_values/preprocess.py"}:
+            return 98
         if "/" not in path and name in {"pyproject.toml", "setup.py"}:
             return 95
+        if path in {"core/api_config.py", "core/llm.py", "core/chat_manager.py", "core/agents.py"}:
+            return 94
         if "/" not in path and name.endswith((".ipynb", ".py", ".sh", ".bat")):
             return 90
         if path.endswith((".py", ".sh")) and any(t in path.lower() for t in ("run_", "eval", "main", "infer")):

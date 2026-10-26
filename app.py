@@ -26,7 +26,7 @@ with st.sidebar:
     reproduction_backend = "codex" if backend_label == "Codex CLI" else "api"
     if reproduction_backend == "codex":
         st.caption("需安装 Codex CLI 并运行 codex login。Codex 单独消耗账户额度，不计入 DeepSeek 20 元预算；每次流程最多调用 10 次。")
-    samples = st.slider("实验目标样本数", 1, 6, 3, disabled=not reproduce,
+    samples = st.slider("实验目标样本数", 1, 100, 3, disabled=not reproduce,
                         help="尽量选择原数据中的小规模子集；仅在原脚本可控制样本数时生效。")
     model = st.text_input("模型名称（留空自动选择）", value="")
     provider_label = st.selectbox("API 策略", ["DeepSeek 优先，预算不足转同济", "仅同济"])
@@ -65,7 +65,7 @@ if complete:
     a, b, c, d = st.columns(4)
     a.metric("通过核验的结论", manifest["accepted_claims"])
     b.metric("API 调用", manifest["api_calls"])
-    c.metric("运行时间", f"{manifest['seconds']:.1f}s")
+    c.metric("阅读运行时间", f"{manifest['seconds']:.1f}s")
     d.metric("实验状态", STATUS_LABELS.get(manifest["reproduction_status"], manifest["reproduction_status"]))
     report_tab, reproduction_tab, evidence_tab, audit_tab = st.tabs(["阅读报告", "论文实验复现", "原文证据", "协作与核验记录"])
     with report_tab:
@@ -88,6 +88,11 @@ if complete:
                 st.error("实验流程停止：" + (str(error) if isinstance(error, (ValueError, RuntimeError)) else type(error).__name__))
         reproduction = state.get("reproduction", {})
         if reproduction.get("kind") == "repository_experiments":
+            if reproduction.get("comparisons"):
+                st.write("ReAct 文本接口兼容性对照（相同任务，提示输入有差异）")
+                st.table([{"任务": row["task"], "原调用方式": f"{row['baseline_successes']}/{row['episodes']}",
+                           "续写兼容": f"{row['continuation_successes']}/{row['episodes']}"}
+                          for row in reproduction["comparisons"]])
             for item in reproduction["papers"]:
                 with st.expander(item["filename"] + " · " + STATUS_LABELS.get(item["status"], item["status"]), expanded=True):
                     if item.get("repository"):
@@ -100,6 +105,12 @@ if complete:
                         st.write("缺少条件：" + missing)
                     if item.get("metrics"):
                         st.json(item["metrics"])
+                    if item.get("artifact_root"):
+                        for relative in item.get("artifacts", []):
+                            artifact = (Path(item["artifact_root"]) / relative).resolve()
+                            if artifact.is_relative_to((ROOT / "output").resolve()) and artifact.is_file() and artifact.stat().st_size <= 10_000_000:
+                                st.download_button("下载 " + Path(relative).name, artifact.read_bytes(), file_name=Path(relative).name,
+                                                   key="artifact-" + item["paper_id"] + "-" + relative)
                     st.json(item, expanded=False)
         elif reproduction.get("status") == "disabled":
             st.info("该次历史阅读未启用复现。点击上方按钮即可单独执行。")

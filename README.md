@@ -83,6 +83,28 @@ Docker 使用只读根目录、2 CPU、4GB 内存、进程数限制和最小权�
 
 原代码只获得临时 API 代理 token，真实密钥保留在主进程；代理继续执行累计20元预算和调用次数限制。支持非流式文本 chat/completions、旧 completions 与 Azure 风格 chat 路径；暂不支持 embedding、视觉、工具调用和流式。容器未配置 GPU，不自动下载大型模型权重。缺数据、权重或其他服务时，逐项列出名称和路径。
 
+### 官方数据与失败重跑
+
+```powershell
+# BIRD 首次下载约346MB；仅解压固定前N条所需数据库，并记录源包及文件哈希
+.venv/Scripts/python.exe -m paperteam fetch-data --dataset bird --samples 6
+# 更大的正式数据子集可直接通过CLI或界面设置目标样本数（1—100）
+.venv/Scripts/python.exe -m paperteam fetch-data --dataset bird --samples 30
+.venv/Scripts/python.exe -m paperteam reproduce --paper MAC-SQL --samples 30 --max-calls 200 --reproduction-backend codex
+# 首次下载约143MB的 ALFWorld 官方文本数据，仅提取 valid_unseen；不下载视觉模型
+.venv/Scripts/python.exe -m paperteam fetch-data --dataset alfworld
+# 对 output 中的已完成/失败实验目录复用原计划；先核对每个源码文件和数据哈希
+.venv/Scripts/python.exe -m paperteam.resume_experiment output/your-run/paper-id --samples 6
+```
+
+数据保存在 `external/datasets/`，作为独立只读挂载提供给容器，不复制到下载的源码里，也不传入真实配置。`/work/datasets` 是容器内指向 `/datasets` 的兼容别名，解决部分原仓库去掉绝对路径开头斜线的问题。第三方代码仍不能访问主项目和真实密钥。失败时也尝试保留已有产物，修复模型同时获得生成和评测日志，避免只看到“预测为空”的后续错误。
+
+ALFWorld 的 Jericho/TextWorld 依赖编译工具；框架会用 `docker/python-tools.Dockerfile` 构建独立运行镜像。构建上下文只有 docker 目录，运行阶段仍使用只读根目录、4GB内存和2CPU限制。HotpotQA/FEVER 的 Wikipedia 入口若返回403，记录依赖不可用，不将错误页当检索内容计算有效性能。
+
+`resume_experiment --pin alfworld==0.4.2` 只修正原计划已包含的依赖版本，并保存修改来源。`--completion-continuation` 显式为旧 Completion 请求增加“按输入继续补全”的 system 格式约束；原始聊天请求不变。该设置会改变模型输入，必须作为兼容性对照单独记录，不能称作原论文完全相同的提示设置。可配合 `--match-episodes <baseline/artifacts/alfworld_results.json>` 复用基线实际执行的相同任务标识；不提供专家动作或答案。
+
+MAC-SQL 的执行准确率直接从原 `eval_result_dev.json` 的全部 `res` 字段聚合；包含失败样本，不丢弃0分，不用模型估分。30条实验只覆盖官方开发集顺序中的首个数据库，不能外推全量1534条或跨库泛化效果。完整指标和失败记录见 [验证记录](docs/validation.md)。
+
 | 状态 | 含义 |
 |---|---|
 | completed | 原实验运行并产生实际产物；基准与评估任务还需有可解析指标 |

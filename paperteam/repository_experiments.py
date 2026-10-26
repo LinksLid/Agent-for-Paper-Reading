@@ -5,14 +5,33 @@ from pathlib import Path
 import re
 import time
 import math
+import httpx
 from typing import Literal, TypedDict
 
 from langgraph.graph import StateGraph, START, END
 from pydantic import BaseModel, Field
 
 from .experiment_runtime import Broker, DockerRuntime, docker_available, safe_relative
-from .repositories import GitHub, inspect_repository, save_json
+from .repositories import GitHub, inspect_repository, save_json, github_proxy
 from .codex_backend import CodexPlanner
+from .datasets import available_datasets, dataset_context, digest
+
+
+def check_external_services(repo: Path):
+    if not (repo / "wikienv.py").is_file():
+        return {}
+    check = {"url": "https://en.wikipedia.org/w/index.php?search=ReAct", "available": False}
+    try:
+        with httpx.Client(timeout=15, follow_redirects=True, trust_env=False, proxy=github_proxy()) as client:
+            response = client.get(check["url"])
+        check["http_status"] = response.status_code
+        check["available"] = response.status_code == 200 and "mw-parser-output" in response.text
+        if not check["available"]:
+            check["reason"] = "Wikipedia 拒绝访问或未返回文章内容。不得绕过访问限制，也不得把错误页当检索结果计算有效指标。可选择原仓库其他具备条件的实验。"
+    except httpx.HTTPError as error:
+        check["error_type"] = type(error).__name__
+        check["reason"] = "Wikipedia 连接失败，当前不能有效运行依赖实时检索的实验。"
+    return {"wikipedia": check}
 
 
 class ExperimentCommand(BaseModel):
@@ -35,6 +54,7 @@ class MetricSpec(BaseModel):
     name: str
     artifact: str
     json_path: str
+    aggregate: Literal["mean", "sum", "count"] | None = None
 
 
 class ExperimentPlan(BaseModel):
@@ -45,9 +65,10 @@ class ExperimentPlan(BaseModel):
     data_source: str
     missing_requirements: list[str]
     uses_llm: bool
+    completion_continuation: bool = False
     install: list[ExperimentCommand] = Field(max_length=4)
     run: list[ExperimentCommand] = Field(max_length=3)
-    patches: list[CompatibilityPatch] = Field(default_factory=list, max_length=5)
+    patches: list[CompatibilityPatch] = Field(default_factory=list, max_length=8)
     artifacts: list[str] = Field(max_length=12)
     metrics: list[MetricSpec] = Field(default_factory=list, max_length=12)
     differences_from_paper: list[str]
@@ -91,7 +112,7 @@ def validate_plan(plan: ExperimentPlan, inventory: dict):
             raise ValueError("运行命令缺少仓库原文依据：" + command.source_file)
         if command.argv[0] not in {"python", "python3", "pip", "pip3", "pytest", "sh", "bash"}:
             raise ValueError("不支持该命令工具")
-        if any("replace-me" in a or "YOUR_" in a or "{" in a or "}" in a for a in command.argv):
+        if any("replace-me" in a or "YOUR_" in a or re.search(r"\{[A-Za-z_][A-Za-z0-9_]*\}", a) for a in command.argv):
             raise ValueError("运行命令仍包含未填参数")
     for patch in plan.patches:
         safe_relative(patch.path)
@@ -112,6 +133,21 @@ def extract_metrics(output: Path, specs: list[dict], artifacts: list[str]):
             continue
         try:
             value = json.loads(path.read_text(encoding="utf-8"))
+            if spec.get("aggregate"):
+                if not isinstance(value, list) or not value:
+                    continue
+                values = []
+                for row in value:
+                    item = row
+                    for part in spec["json_path"].split(".") if spec["json_path"] else []:
+                        item = item[int(part)] if isinstance(item, list) else item[part]
+                    if not isinstance(item, (int, float)) or isinstance(item, bool) or not math.isfinite(item):
+                        raise ValueError("所有评测行必须有真实有限数值")
+                    values.append(item)
+                value = {"mean": lambda: sum(values) / len(values), "sum": lambda: sum(values),
+                         "count": lambda: len(values)}[spec["aggregate"]]()
+                metrics.append({**spec, "value": value, "sample_count": len(values), "provenance": relative})
+                continue
             for part in spec["json_path"].split(".") if spec["json_path"] else []:
                 value = value[int(part)] if isinstance(value, list) else value[part]
             if isinstance(value, (int, float)) and not isinstance(value, bool) and math.isfinite(value):
@@ -121,9 +157,13 @@ def extract_metrics(output: Path, specs: list[dict], artifacts: list[str]):
     return metrics
 
 
-def build_repository_workflow(llm, github: GitHub, output: Path, samples=3, progress=None, planner=None):
+def build_repository_workflow(llm, github: GitHub, output: Path, samples=3, progress=None, planner=None, datasets=None, start_at="search"):
+    if start_at not in {"search", "execute"}:
+        raise ValueError("不支持该工作流起点")
     output.mkdir(parents=True, exist_ok=True)
     planner = planner if planner is not None else llm
+    datasets = datasets or []
+    first_record = len(getattr(llm, "records", []))
 
     def checkpoint(stage, fn):
         def wrapped(state):
@@ -156,6 +196,8 @@ def build_repository_workflow(llm, github: GitHub, output: Path, samples=3, prog
 
     def inspect(state):
         inventory = inspect_repository(Path(state["repo_path"]))
+        inventory["datasets"] = dataset_context(datasets)
+        inventory["external_services"] = check_external_services(Path(state["repo_path"]))
         save_json(output / "inspection.json", inventory)
         return {"inventory": inventory, "status": "running"}
 
@@ -163,7 +205,16 @@ def build_repository_workflow(llm, github: GitHub, output: Path, samples=3, prog
         prompt = ("根据实际下载的论文仓库制定可执行实验计划。必须使用原仓库的实验入口、真实数据和评估代码，禁止另造玩具数据、"
                   "预填模型答案或把导入成功当作实验复现。当前最多计划 " + str(samples) + " 个真实样本。"
                   "环境：Docker CPU 容器，Python 3.10/3.11/3.12 可选，4GB 内存，暂无容器 GPU，"
-                  "不自动下载大型模型、未挂载任何用户数据集或真实密钥，网络可访问公开服务。"
+                  "不自动下载大型模型、没有真实密钥。inventory.datasets 列出实际只读挂载的已核验公开数据及其容器路径；"
+                  "其中 bird-dev 的 dev.json 是固定前N条真实开发集，dev_gold.sql 是对应官方金标准，dev_tables.json 为原始模式。"
+                  "数据可直接作为原脚本参数使用，禁止向生成模型提供金标准 SQL。若 datasets 为空才表示无外部数据。"
+                  "external_services 列出外部服务实际探测结果，服务不可用时不能伪装成已完成的性能评测。"
+                  "如 ReAct 的 Wikipedia 访问被拒绝而已提供 alfworld 数据，优先执行 alfworld.ipynb 的原文本游戏实验。"
+                  "ALFWorld 文本包不需要 Torch/视觉模型，使用已发布版本0.4.2（GitHub master 的0.5.0尚未发布）；get_environment 为当前 API，"
+                  "旧Completion接聊天模型时可显式设置completion_continuation=true增加按原提示续写的system格式约束；"
+                  "这会改变模型输入，必须记入differences_from_paper，不能当成原论文同提示条件。"
+                  "旧 getattr(alfworld.agents.environment, ...) 可做等价接口适配；PDDL逻辑从已安装包的 alfworld.info 路径读取。"
+                  "保留原动作循环和提示、原环境 won 判定，只缩小外层 episode 数；不额外使用 expert 动作解题。"
                   "需要本地大模型/未提供数据/其他服务而无法解决时 runnable=false，列出精确缺口及位置，不伪造运行。"
                   "数据在仓库中可用时优先做小规模原实验；API 需要时 uses_llm=true，框架提供兼容 OpenAI 的临时代理，"
                   "通过 OPENAI_BASE_URL/OPENAI_API_BASE/OPENAI_API_KEY 环境变量使用，不得硬编码外部服务密钥。"
@@ -193,13 +244,22 @@ def build_repository_workflow(llm, github: GitHub, output: Path, samples=3, prog
 
     def execute(state):
         plan = ExperimentPlan.model_validate(state["plan"])
+        wiki = state["inventory"].get("external_services", {}).get("wikipedia", {})
+        if wiki and not wiki.get("available") and any(
+                arg.lower().endswith(("hotpotqa.ipynb", "fever.ipynb")) for command in plan.run for arg in command.argv):
+            return {"status": "blocked", "reason": "Wikipedia 外部依赖不可用，未将错误页产生的分数计为有效论文实验。"}
         if not docker_available():
             return {"status": "blocked", "reason": "需要 Linux Docker 引擎执行原仓库；当前 Docker 未就绪。源码和实验计划已保存。"}
-        broker_context = Broker(llm, max_calls=max(8, samples * 14)) if plan.uses_llm else nullcontext(None)
+        calls_per_sample = 55 if any(arg.lower().endswith("alfworld.ipynb") for step in plan.run for arg in step.argv) else 14
+        broker_context = Broker(llm, max_calls=max(8, samples * calls_per_sample),
+                                completion_continuation=plan.completion_continuation) if plan.uses_llm else nullcontext(None)
         commands, artifacts = list(state.get("commands", [])), []
         attempt_output = output if not state.get("attempts") else output / ("retry-" + str(state["attempts"]))
         with broker_context as broker:
-            with DockerRuntime(Path(state["repo_path"]), attempt_output, plan.python_version, broker) as runtime:
+            runtime_options = {"datasets": datasets} if datasets else {}
+            if any("alfworld" in arg.lower() or "textworld" in arg.lower() for command in plan.install for arg in command.argv):
+                runtime_options["build_tools"] = True
+            with DockerRuntime(Path(state["repo_path"]), attempt_output, plan.python_version, broker, **runtime_options) as runtime:
                 for patch in plan.patches:
                     runtime.patch(patch.path, patch.old, patch.new)
                 save_json(output / "compatibility_patches.json", [p.model_dump() for p in plan.patches])
@@ -210,7 +270,9 @@ def build_repository_workflow(llm, github: GitHub, output: Path, samples=3, prog
                         commands.append(command)
                         save_json(output / "execution_history.json", commands)
                         if command["exit_code"]:
-                            return {"commands": commands, "status": "failed", "reason": phase + " 命令失败；见 commands.json 原始输出"}
+                            artifacts = runtime.collect(plan.artifacts)
+                            return {"commands": commands, "artifacts": artifacts, "artifact_root": str(attempt_output),
+                                    "status": "failed", "reason": phase + " 命令失败；见 commands.json 原始输出"}
                 notebooks = [arg for command in plan.run for arg in command.argv if arg.endswith(".ipynb")]
                 for command in plan.run:
                     if "--output" in command.argv:
@@ -222,13 +284,16 @@ def build_repository_workflow(llm, github: GitHub, output: Path, samples=3, prog
         return {"commands": commands, "artifacts": artifacts, "artifact_root": str(attempt_output), "status": "running"}
 
     def repair(state):
+        evidence = [{**{k: c[k] for k in ("phase", "argv", "exit_code") if k in c},
+                     "stdout": c.get("stdout", "")[-9000:], "stderr": c.get("stderr", "")[-6500:]}
+                    for c in state.get("commands", []) if c.get("phase") == "experiment" or c.get("exit_code")][-4:]
         prompt = ("原仓库实验发生了实际错误。根据日志修复依赖版本/API兼容/路径/运行参数，最多再尝试一次。"
                   "不得替换真实数据、改算法、伪造结果或硬编码答案。旧代码 openai.Completion.create 或"
                   "openai.ChatCompletion.create 需要 openai<1；旧 gym 推荐 numpy<2。框架提供旧completions与chat代理。"
                   "缺少无法自动取得的数据或模型时 runnable=false 并准确说明。"
                   "完整返回新的实验计划，保留仍需要的样本上限和结果导出补丁。\n原计划：" +
                   json.dumps(state["plan"], ensure_ascii=False) + "\n失败命令：" +
-                  json.dumps(state.get("commands", [])[-1:], ensure_ascii=False)[-10000:] +
+                  json.dumps(evidence, ensure_ascii=False) +
                   "\n仓库：" + json.dumps(state["inventory"], ensure_ascii=False))
         revised = planner.structured("复现/根据运行错误修复", prompt, ExperimentPlan, max_tokens=6500)
         validate_plan(revised, state["inventory"])
@@ -237,15 +302,32 @@ def build_repository_workflow(llm, github: GitHub, output: Path, samples=3, prog
                 "status": "running" if revised.runnable else "blocked", "reason": "" if revised.runnable else revised.reason}
 
     def assess(state):
-        metrics = extract_metrics(Path(state.get("artifact_root", str(output))), state["plan"]["metrics"], state.get("artifacts", []))
+        specs = state["plan"]["metrics"]
+        if not specs and state.get("candidate", {}).get("url") == "https://github.com/wbbeyourself/MAC-SQL":
+            evaluation = next((p.removeprefix("artifacts/") for p in state.get("artifacts", [])
+                               if p.endswith("/eval_result_dev.json")), None)
+            if evaluation:
+                specs = [{"name": name, "artifact": evaluation, "json_path": "res", "aggregate": aggregate}
+                         for name, aggregate in [("execution_accuracy", "mean"), ("correct", "sum"), ("samples", "count")]]
+        metrics = extract_metrics(Path(state.get("artifact_root", str(output))), specs, state.get("artifacts", []))
         scope = state["plan"]["scope"]
         status = "smoke_passed" if scope == "smoke_test" else "completed" if state.get("artifacts") else "executed"
         if scope in {"benchmark_subset", "evaluation_only"} and not metrics:
             status = "executed"
-        evidence = {"scope": scope, "status": status, "commands": state["commands"], "artifacts": state.get("artifacts", []), "metrics": metrics}
+        commands = [{**{k: c[k] for k in ("phase", "argv", "exit_code", "seconds") if k in c},
+                     "stdout": c.get("stdout", "")[-3000:], "stderr": c.get("stderr", "")[-1500:]}
+                    for c in state["commands"]]
+        actual_models = list({(r["provider"], r["model"]): {"provider": r["provider"], "model": r["model"]}
+                             for r in getattr(llm, "records", [])[first_record:]
+                             if r.get("agent") == "原仓库实验/API" and r.get("status") == "ok"}.values())
+        evidence = {"scope": scope, "status": status, "commands": commands, "artifacts": state.get("artifacts", []),
+                    "metrics": metrics, "actual_models": actual_models, "datasets": state["inventory"].get("datasets", []),
+                    "completion_continuation": state["plan"].get("completion_continuation", False)}
         assessment = llm.structured("复现/实验结果核对", "只根据命令日志、实际产物和解析到的指标说明完成范围。"
                                     "不编造指标，不把 smoke_test 当论文实验，不把其他模型运行结果称为论文完整复现。\n" +
-                                    json.dumps(evidence, ensure_ascii=False)[-26000:], ExperimentAssessment)
+                                    "代码或日志中的请求模型名称可能只是代理前的别名，实际模型必须以 actual_models 为准。"
+                                    "抽样方式和数据库覆盖以 datasets 的 source/selection/descriptor 为准。\n" +
+                                    json.dumps(evidence, ensure_ascii=False), ExperimentAssessment)
         return {"status": status, "metrics": metrics, "assessment": assessment.model_dump()}
 
     graph = StateGraph(RepoState)
@@ -253,7 +335,7 @@ def build_repository_workflow(llm, github: GitHub, output: Path, samples=3, prog
     stages = list(functions)
     for stage, fn in functions.items():
         graph.add_node(stage, checkpoint(stage, fn))
-    graph.add_edge(START, "search")
+    graph.add_edge(START, start_at)
     for current, following in zip(stages, stages[1:]):
         if current == "execute":
             continue
@@ -272,6 +354,8 @@ def run_repository_experiments(papers, llm, root: Path, output: Path, samples=3,
         raise ValueError("实验规划后端必须是 api 或 codex")
     output.mkdir(parents=True, exist_ok=True)
     planner = CodexPlanner(output / "codex") if backend == "codex" else llm
+    datasets = available_datasets(root, samples)
+    save_json(output / "datasets.json", [{k: v for k, v in r.items() if k != "host_path"} for r in datasets])
     github = GitHub(root)
     results = []
     started = time.monotonic()
@@ -280,7 +364,7 @@ def run_repository_experiments(papers, llm, root: Path, output: Path, samples=3,
             first_record = len(llm.records)
             folder = output / paper["paper_id"]
             first_codex_record = len(planner.records) if backend == "codex" else 0
-            graph = build_repository_workflow(llm, github, folder, samples, progress, planner=planner)
+            graph = build_repository_workflow(llm, github, folder, samples, progress, planner=planner, datasets=datasets)
             (folder / "workflow.mmd").write_text(graph.get_graph().draw_mermaid(), encoding="utf-8")
             state = graph.invoke({"paper": paper, "events": []})
             result = {"paper_id": paper["paper_id"], "filename": paper["filename"], "status": state["status"],
@@ -292,6 +376,8 @@ def run_repository_experiments(papers, llm, root: Path, output: Path, samples=3,
                       "metrics": state.get("metrics", []), "assessment": state.get("assessment"),
                       "events": state["events"], "full_paper_reproduced": False,
                       "planning_backend": backend,
+                      "completion_continuation": state.get("plan", {}).get("completion_continuation", False),
+                      "datasets": dataset_context(datasets),
                       "codex_calls": len(planner.records) - first_codex_record if backend == "codex" else 0}
             result["experiment_models"] = list({(r["provider"], r["model"]): {"provider": r["provider"], "model": r["model"]}
                                                  for r in llm.records[first_record:] if r.get("agent") == "原仓库实验/API" and r.get("status") == "ok"}.values())
@@ -333,6 +419,10 @@ def reproduction_markdown(result):
             lines.append("- 本次计划范围：`" + paper["scope"] + "`。")
         if paper.get("planning_backend"):
             lines.append("- 规划与修复后端：" + ("Codex CLI" if paper["planning_backend"] == "codex" else "现有 API") + "。")
+        if paper.get("experiment_models"):
+            lines.append("- 实际实验模型：" + "、".join(m["model"] for m in paper["experiment_models"]) + "。")
+        if paper.get("completion_continuation"):
+            lines.append("- 显式启用旧 Completion 续写格式约束；这是兼容性对照，模型输入与原论文有差异。")
         if paper.get("reason"):
             lines.append("- 当前情况：" + paper["reason"])
         for missing in (paper.get("plan") or {}).get("missing_requirements", []):

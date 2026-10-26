@@ -20,6 +20,9 @@ def main():
     index = sub.add_parser("index", help="本地索引论文，不调用 API")
     index.add_argument("--paper-dir", type=Path, default=ROOT / "paper")
     sub.add_parser("fetch-macsql", help="下载并校验固定版本的 MAC-SQL 源码")
+    data = sub.add_parser("fetch-data", help="准备可核验的官方评测数据，不调用模型")
+    data.add_argument("--dataset", choices=["bird", "alfworld"], required=True)
+    data.add_argument("--samples", type=int, choices=range(1, 101), default=6)
     read = sub.add_parser("read", help="运行阅读工作流")
     read.add_argument("--paper-dir", type=Path, default=ROOT / "paper")
     read.add_argument("--paper", action="append", help="按文件名片段筛选，可重复")
@@ -29,7 +32,7 @@ def main():
     read.add_argument("--reproduce", action="store_true")
     read.add_argument("--reproduction-backend", choices=["api", "codex"], default="api",
                       help="原仓库实验规划与修复后端；codex 使用本机 CLI 登录账户，单独消耗额度")
-    read.add_argument("--samples", type=int, choices=range(1, 7), default=3)
+    read.add_argument("--samples", type=int, choices=range(1, 101), metavar="1-100", default=3)
     read.add_argument("--model", default="")
     read.add_argument("--provider", choices=["auto", "deepseek", "tongji"], default="auto")
     read.add_argument("--max-calls", type=int)
@@ -37,7 +40,7 @@ def main():
     repro = sub.add_parser("reproduce", help="逐篇搜索GitHub、下载并尝试原仓库实验")
     repro.add_argument("--paper-dir", type=Path, default=ROOT / "paper")
     repro.add_argument("--paper", action="append")
-    repro.add_argument("--samples", type=int, choices=range(1, 7), default=3)
+    repro.add_argument("--samples", type=int, choices=range(1, 101), metavar="1-100", default=3)
     repro.add_argument("--model", default="")
     repro.add_argument("--provider", choices=["auto", "deepseek", "tongji"], default="auto")
     repro.add_argument("--max-calls", type=int, default=80)
@@ -52,6 +55,12 @@ def main():
         path, lock = checkout(ROOT)
         print(json.dumps({"path": str(path), "commit": lock["commit"]}))
         return
+    if args.command == "fetch-data":
+        from .datasets import download_bird, download_alfworld
+        path, descriptor = download_bird(ROOT, args.samples) if args.dataset == "bird" else download_alfworld(ROOT)
+        print(json.dumps({"path": str(path), "name": descriptor["name"], "samples": descriptor.get("samples"),
+                          "games": descriptor.get("game_files")}, ensure_ascii=False))
+        return
     settings = Settings.load(model=getattr(args, "model", ""), provider=args.provider)
     if getattr(args, "max_calls", None):
         settings = replace(settings, max_calls=args.max_calls)
@@ -63,7 +72,8 @@ def main():
             llm.close()
     elif args.command == "reproduce":
         from datetime import datetime
-        output = ROOT / "output" / ("reproduction-" + datetime.now().strftime("%Y%m%d-%H%M%S"))
+        import uuid
+        output = ROOT / "output" / ("reproduction-" + datetime.now().strftime("%Y%m%d-%H%M%S-") + uuid.uuid4().hex[:6])
         llm = LLM(settings, output)
         try:
             paths = sorted(args.paper_dir.glob("*.pdf"))

@@ -101,3 +101,25 @@ def test_broker_keeps_legacy_prompt_and_stop_options():
             assert client.kwargs["messages"] == [{"role": "user", "content": "Question: actual"}]
             assert client.kwargs["request_options"]["stop"] == ["Observation"]
             assert http.post(url, headers=headers, json={"prompt": "second"}).status_code == 429
+
+
+def test_completion_continuation_is_explicit_and_does_not_change_chat_requests():
+    import httpx
+    class Client:
+        records = [{"model": "test", "usage": {}}]
+        def chat(self, role, prompt, **kwargs):
+            self.messages = kwargs["messages"]
+            return "go to desk 1"
+    client = Client()
+    with Broker(client, max_calls=2, completion_continuation=True) as broker:
+        with httpx.Client(trust_env=False) as http:
+            url = f"http://127.0.0.1:{broker.port}/v1"
+            headers = {"Authorization": "Bearer " + broker.token}
+            prompt = "Official examples and current observation\n>"
+            result = http.post(url + "/completions", headers=headers, json={"prompt": prompt, "stop": ["\n"]})
+            assert result.status_code == 200
+            assert client.messages[0]["role"] == "system" and "text completion engine" in client.messages[0]["content"]
+            assert client.messages[1] == {"role": "user", "content": prompt}
+            messages = [{"role": "user", "content": "Original chat prompt"}]
+            assert http.post(url + "/chat/completions", headers=headers, json={"messages": messages}).status_code == 200
+            assert client.messages == messages
