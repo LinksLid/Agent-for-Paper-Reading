@@ -1,0 +1,8 @@
+langgraph>=1.0,<2
+langgraph-checkpoint-sqlite>=3,<4
+httpx>=0.28,<1
+pydantic>=2.10,<3
+python-dotenv>=1.0,<2
+pypdf>=6,<7
+streamlit>=1.45,<2
+pytest>=8,<10

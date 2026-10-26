@@ -1,0 +1,67 @@
+{
+  "status": "completed",
+  "mode": "verified",
+  "model": "deepseek-flash",
+  "models_used": [
+    {
+      "provider": "deepseek",
+      "model": "deepseek-flash"
+    }
+  ],
+  "provider_switches": [],
+  "question": "分别解释每篇论文的研究问题、核心方法和实验依据；按任务领域组织比较，重点比较 MAC-SQL 与 CHESS 的协作机制，不对不同任务的指标直接排名。",
+  "papers": [
+    {
+      "filename": "CHESS：Contextual Harnessing for Efficient SQL Synthesis.pdf",
+      "paper_id": "895fe58264",
+      "sha256": "895fe5826453b4c91cca66372dc6a25e46d7f068fe003ac3f606b6bcb61930e8",
+      "pages": 41
+    },
+    {
+      "filename": "KnowTrans- Boosting Transferability of Data Preparation LLMs via Knowledge Augmentation.pdf",
+      "paper_id": "ee0f3d167f",
+      "sha256": "ee0f3d167f869d14d456e1838c6086bc46a63878f5f4df18d42976407ab0bff9",
+      "pages": 15
+    },
+    {
+      "filename": "MAC-SQL：A Multi-Agent Collaborative Framework for Text-to-SQL.pdf",
+      "paper_id": "41241a9870",
+      "sha256": "41241a987040ab1d9b4948d707fae6508659dc91eb09b2e04c7f6ff053fddfde",
+      "pages": 18
+    },
+    {
+      "filename": "ReAct- Synergizing Reasoning and Acting in Language Models.pdf",
+      "paper_id": "f285b0971a",
+      "sha256": "f285b0971ae4a790e402fb93966bed3adde2cf0a04977d08b2b40d6ab0cace69",
+      "pages": 33
+    },
+    {
+      "filename": "Visual Instruction Tuning.pdf",
+      "paper_id": "dc8bace378",
+      "sha256": "dc8bace378a282ea78caa9b5959306202fbfa3b8cedaf8a66541a9af18f4d3bf",
+      "pages": 25
+    }
+  ],
+  "max_repairs": 1,
+  "reproduce": true,
+  "api_calls": 33,
+  "seconds": 105.829,
+  "accepted_claims": 28,
+  "rejected_claims": 2,
+  "review_rounds": 2,
+  "reproduction_status": "completed",
+  "total_tokens": 134842,
+  "validation_date": "2026-10-26",
+  "review_summary": [
+    {
+      "round": 1,
+      "accepted": 26,
+      "rejected_count": 5
+    },
+    {
+      "round": 2,
+      "accepted": 28,
+      "rejected_count": 2
+    }
+  ]
+}

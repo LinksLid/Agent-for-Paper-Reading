@@ -1,0 +1,14 @@
+.env
+.env.*
+*.env
+*.env.*
+!.env.example
+!deepseek.env.example
+.venv/
+.cache/
+__pycache__/
+.pytest_cache/
+external/
+output/
+paper/*.pdf
+*.pyc

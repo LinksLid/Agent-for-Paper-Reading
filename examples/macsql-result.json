@@ -1,0 +1,216 @@
+{
+  "status": "completed",
+  "scope": "method_microbenchmark",
+  "full_paper_reproduced": false,
+  "source": {
+    "repository": "https://github.com/wbbeyourself/MAC-SQL",
+    "commit": "31a9df5e0d520be4769be57a4b9022e5e34a14f4",
+    "files": {
+      "core/const.py": "dcf385e3f5cb13c12c418e8fd92b7b13d9cf1b470348414a750113e4d4ebaeae",
+      "core/utils.py": "71dfd61513c4c46105aaf7d9d938b1a8f49cc70ed31879fc84dd1f23692bb99d",
+      "evaluation/evaluation_bird_ex.py": "321c4c7c144feab33771d075e3e248b6a16f40f6911fa91f1b1a97f0e61a7e85",
+      "README.md": "e2d02878899a10135263f9fa982d0144ea23a037450e11d458b418e1180c6811"
+    }
+  },
+  "model": "deepseek-flash",
+  "samples": 6,
+  "database_variants": 2,
+  "dataset": "PaperTeam synthetic university database v1",
+  "selector": "bypassed_small_schema",
+  "api_calls": 12,
+  "baseline_ex": 1.0,
+  "multi_ex": 1.0,
+  "baseline_multiset_ex": 1.0,
+  "multi_multiset_ex": 1.0,
+  "seconds": 13.625,
+  "cases": [
+    {
+      "id": "count",
+      "question": "How many students have a score greater than 80?",
+      "gold_sql": "SELECT COUNT(*) FROM students WHERE score > 80",
+      "baseline_sql": "SELECT COUNT(*) FROM students WHERE score > 80;",
+      "multi_sql": "SELECT COUNT(*)\nFROM students\nWHERE score > 80",
+      "trace": [
+        {
+          "node": "decomposer",
+          "sql": "SELECT COUNT(*)\nFROM students\nWHERE score > 80"
+        },
+        {
+          "node": "execute",
+          "error": ""
+        }
+      ],
+      "refinements": 0,
+      "baseline_ex": 1,
+      "baseline_multiset_ex": 1,
+      "baseline_errors": [
+        "",
+        ""
+      ],
+      "multi_ex": 1,
+      "multi_multiset_ex": 1,
+      "multi_errors": [
+        "",
+        ""
+      ]
+    },
+    {
+      "id": "join",
+      "question": "What are the names of students in the CS department?",
+      "gold_sql": "SELECT s.name FROM students s JOIN departments d ON s.dept_id=d.id WHERE d.name='CS'",
+      "baseline_sql": "SELECT s.name\nFROM students AS s\nJOIN departments AS d ON s.dept_id = d.id\nWHERE d.name = 'CS'",
+      "multi_sql": "SELECT T1.`name`\n  FROM `students` AS T1\n  INNER JOIN `departments` AS T2\n  ON T1.`dept_id` = T2.`id`\n  WHERE T2.`name` = 'CS'",
+      "trace": [
+        {
+          "node": "decomposer",
+          "sql": "SELECT T1.`name`\n  FROM `students` AS T1\n  INNER JOIN `departments` AS T2\n  ON T1.`dept_id` = T2.`id`\n  WHERE T2.`name` = 'CS'"
+        },
+        {
+          "node": "execute",
+          "error": ""
+        }
+      ],
+      "refinements": 0,
+      "baseline_ex": 1,
+      "baseline_multiset_ex": 1,
+      "baseline_errors": [
+        "",
+        ""
+      ],
+      "multi_ex": 1,
+      "multi_multiset_ex": 1,
+      "multi_errors": [
+        "",
+        ""
+      ]
+    },
+    {
+      "id": "group",
+      "question": "List each department name and its average student score, excluding departments without students.",
+      "gold_sql": "SELECT d.name, AVG(s.score) FROM departments d JOIN students s ON d.id=s.dept_id GROUP BY d.id,d.name",
+      "baseline_sql": "SELECT d.name, AVG(s.score)\nFROM departments d\nJOIN students s ON d.id = s.dept_id\nGROUP BY d.id, d.name",
+      "multi_sql": "SELECT T1.name, AVG(T2.score)\nFROM departments AS T1\nINNER JOIN students AS T2\nON T1.id = T2.dept_id\nGROUP BY T1.name",
+      "trace": [
+        {
+          "node": "decomposer",
+          "sql": "SELECT T1.name, AVG(T2.score)\nFROM departments AS T1\nINNER JOIN students AS T2\nON T1.id = T2.dept_id\nGROUP BY T1.name"
+        },
+        {
+          "node": "execute",
+          "error": ""
+        }
+      ],
+      "refinements": 0,
+      "baseline_ex": 1,
+      "baseline_multiset_ex": 1,
+      "baseline_errors": [
+        "",
+        ""
+      ],
+      "multi_ex": 1,
+      "multi_multiset_ex": 1,
+      "multi_errors": [
+        "",
+        ""
+      ]
+    },
+    {
+      "id": "nested",
+      "question": "Which student names have a score higher than the average score of all students?",
+      "gold_sql": "SELECT name FROM students WHERE score > (SELECT AVG(score) FROM students)",
+      "baseline_sql": "SELECT name\nFROM students\nWHERE score > (SELECT AVG(score) FROM students)",
+      "multi_sql": "SELECT `name`\n  FROM students\n  WHERE `score` > (\n    SELECT AVG(`score`)\n    FROM students\n  )",
+      "trace": [
+        {
+          "node": "decomposer",
+          "sql": "SELECT `name`\n  FROM students\n  WHERE `score` > (\n    SELECT AVG(`score`)\n    FROM students\n  )"
+        },
+        {
+          "node": "execute",
+          "error": ""
+        }
+      ],
+      "refinements": 0,
+      "baseline_ex": 1,
+      "baseline_multiset_ex": 1,
+      "baseline_errors": [
+        "",
+        ""
+      ],
+      "multi_ex": 1,
+      "multi_multiset_ex": 1,
+      "multi_errors": [
+        "",
+        ""
+      ]
+    },
+    {
+      "id": "empty_department",
+      "question": "Which department names have no students?",
+      "gold_sql": "SELECT d.name FROM departments d LEFT JOIN students s ON d.id=s.dept_id WHERE s.id IS NULL",
+      "baseline_sql": "SELECT name\nFROM departments\nWHERE id NOT IN (SELECT dept_id FROM students)",
+      "multi_sql": "SELECT `name`\n  FROM departments\n  WHERE `id` NOT IN (\n    SELECT `dept_id`\n    FROM students\n  )",
+      "trace": [
+        {
+          "node": "decomposer",
+          "sql": "SELECT `name`\n  FROM departments\n  WHERE `id` NOT IN (\n    SELECT `dept_id`\n    FROM students\n  )"
+        },
+        {
+          "node": "execute",
+          "error": ""
+        }
+      ],
+      "refinements": 0,
+      "baseline_ex": 1,
+      "baseline_multiset_ex": 1,
+      "baseline_errors": [
+        "",
+        ""
+      ],
+      "multi_ex": 1,
+      "multi_multiset_ex": 1,
+      "multi_errors": [
+        "",
+        ""
+      ]
+    },
+    {
+      "id": "having",
+      "question": "List department names that have at least two students with scores of 80 or above.",
+      "gold_sql": "SELECT d.name FROM departments d JOIN students s ON d.id=s.dept_id WHERE s.score >=80 GROUP BY d.id,d.name HAVING COUNT(*)>=2",
+      "baseline_sql": "SELECT d.name\nFROM departments d\nJOIN students s ON d.id = s.dept_id\nWHERE s.score >= 80\nGROUP BY d.id, d.name\nHAVING COUNT(s.id) >= 2;",
+      "multi_sql": "SELECT T2.`name`\n  FROM students AS T1\n  INNER JOIN departments AS T2\n  ON T1.`dept_id` = T2.`id`\n  WHERE T1.`score` >= 80\n  GROUP BY T1.`dept_id`, T2.`name`\n  HAVING COUNT(T1.`id`) >= 2",
+      "trace": [
+        {
+          "node": "decomposer",
+          "sql": "SELECT T2.`name`\n  FROM students AS T1\n  INNER JOIN departments AS T2\n  ON T1.`dept_id` = T2.`id`\n  WHERE T1.`score` >= 80\n  GROUP BY T1.`dept_id`, T2.`name`\n  HAVING COUNT(T1.`id`) >= 2"
+        },
+        {
+          "node": "execute",
+          "error": ""
+        }
+      ],
+      "refinements": 0,
+      "baseline_ex": 1,
+      "baseline_multiset_ex": 1,
+      "baseline_errors": [
+        "",
+        ""
+      ],
+      "multi_ex": 1,
+      "multi_multiset_ex": 1,
+      "multi_errors": [
+        "",
+        ""
+      ]
+    }
+  ],
+  "limitations": [
+    "不是 BIRD/Spider 正式基准，不能与论文 EX 数字比较。",
+    "使用当前 API 模型，未使用论文 GPT-4 或 SQL-Llama。",
+    "重用官方提示词、SQL 解析及 EX 函数；编排和 API 接口由本项目适配。",
+    "小型模式跳过 Selector，仅在 SQL 执行报错时触发 Refiner。",
+    "基线与多步方法的调用次数及提示长度不同，不构成等预算优劣证明。",
+    "官方 EX 使用结果集合；额外记录多重集比较；仍未覆盖排序语义。"
+  ]
+}

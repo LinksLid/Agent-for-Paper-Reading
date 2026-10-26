@@ -1,0 +1,10 @@
+{
+  "repository": "https://github.com/wbbeyourself/MAC-SQL",
+  "commit": "31a9df5e0d520be4769be57a4b9022e5e34a14f4",
+  "files": {
+    "core/const.py": "dcf385e3f5cb13c12c418e8fd92b7b13d9cf1b470348414a750113e4d4ebaeae",
+    "core/utils.py": "71dfd61513c4c46105aaf7d9d938b1a8f49cc70ed31879fc84dd1f23692bb99d",
+    "evaluation/evaluation_bird_ex.py": "321c4c7c144feab33771d075e3e248b6a16f40f6911fa91f1b1a97f0e61a7e85",
+    "README.md": "e2d02878899a10135263f9fa982d0144ea23a037450e11d458b418e1180c6811"
+  }
+}
