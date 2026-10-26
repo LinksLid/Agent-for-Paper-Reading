@@ -14,7 +14,7 @@ class Settings:
     base_url: str = ""
     api_key: str = field(default="", repr=False)
     model: str = ""
-    max_calls: int = 30
+    max_calls: int = 80
     timeout: float = 120
     provider: str = "compatible"
     fallback: "Settings | None" = field(default=None, repr=False)
@@ -49,5 +49,5 @@ class Settings:
         if budget <= 0:
             raise ValueError("DEEPSEEK_BUDGET_CNY 必须大于零，且最大为 20。")
         return cls(root, base, key, model or values.get("MODEL") or values.get("OPENAI_MODEL") or "",
-                   int(values.get("MAX_API_CALLS", 30)), float(values.get("API_TIMEOUT", 120)), provider,
+                   int(values.get("MAX_API_CALLS", 80)), float(values.get("API_TIMEOUT", 120)), provider,
                    deepseek_budget_cny=budget)

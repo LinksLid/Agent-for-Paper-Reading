@@ -54,3 +54,12 @@ def test_provider_error_does_not_echo_body_or_key(tmp_path):
         llm.chat("test", "hello")
     assert "test-secret" not in str(failure.value) and "confidential" not in str(failure.value)
     llm.close()
+
+
+def test_legacy_completion_can_return_length_limited_output(tmp_path):
+    llm = client(tmp_path, lambda _: httpx.Response(200, json={"choices": [{"message": {"content": "partial action"}, "finish_reason": "length"}]}))
+    with pytest.raises(RuntimeError, match="token 上限"):
+        llm.chat("structured", "hello")
+    assert llm.chat("legacy", "hello", allow_truncated=True) == "partial action"
+    assert llm.records[-1]["finish_reason"] == "length"
+    llm.close()

@@ -97,7 +97,8 @@ class LLM:
             self._switch("无法确认人民币余额，保守切换备用接口")
             return None
 
-    def chat(self, role: str, prompt: str, max_tokens: int = 3500, system: str = SYSTEM) -> str:
+    def chat(self, role: str, prompt: str, max_tokens: int = 3500, system: str = SYSTEM,
+             messages: list[dict] | None = None, request_options: dict | None = None, allow_truncated=False) -> str:
         started = time.monotonic()
         record = {"agent": role, "status": "failed"}
         try:
@@ -115,10 +116,11 @@ class LLM:
                         self.calls += 1
                         record["call"] = self.calls
                     body = {
-                        "model": self.model, "messages": [{"role": "system", "content": system},
+                        "model": self.model, "messages": messages or [{"role": "system", "content": system},
                                                           {"role": "user", "content": prompt}],
                         "temperature": 0.1, "max_tokens": max_tokens,
                     }
+                    body.update({k: v for k, v in (request_options or {}).items() if k in {"stop", "temperature", "top_p"}})
                     if "deepseek" in self.model.lower():
                         body["thinking"] = {"type": "disabled"}
                     usage = None
@@ -148,7 +150,7 @@ class LLM:
             record["finish_reason"] = payload["choices"][0].get("finish_reason")
             if not isinstance(content, str) or not content.strip():
                 raise ValueError("empty model content")
-            if record["finish_reason"] == "length":
+            if record["finish_reason"] == "length" and not allow_truncated:
                 raise RuntimeError(f"{role} 输出达到 token 上限；请减少单次材料或提高输出限制。")
             record.update(status="ok")
             profile = {"provider": provider, "model": model}
@@ -174,10 +176,10 @@ class LLM:
                     if self.budget:
                         (self.run_dir / "budget.json").write_text(json.dumps(self.budget.summary(), ensure_ascii=False, indent=2), encoding="utf-8")
 
-    def structured(self, role: str, prompt: str, schema: type[T]) -> T:
+    def structured(self, role: str, prompt: str, schema: type[T], max_tokens: int = 3500) -> T:
         suffix = "\nJSON Schema:\n" + json.dumps(schema.model_json_schema(), ensure_ascii=False)
         for attempt in range(2):
-            text = self.chat(role, prompt + suffix)
+            text = self.chat(role, prompt + suffix, max_tokens=max_tokens)
             try:
                 clean = text.strip()
                 if clean.startswith("```"):

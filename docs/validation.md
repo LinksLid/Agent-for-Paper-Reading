@@ -1,5 +1,7 @@
 # 实际验证记录
 
+2026-10-27：复现已改为逐篇 GitHub 搜索、核验、源码下载及原仓库实验。新版记录见本文末尾；以下2026-10-26的合成数据验证为历史记录，不能解释为原论文实验复现。
+
 日期：2026-10-26。自动测试与真实模型运行分别记录。
 
 ## 自动测试
@@ -48,3 +50,23 @@
 - DeepSeek 优先的五篇运行完成后，本项目两次真实阅读运行合计的高峰费率保守预算记账为约 0.540296 元，低于 20 元上限；这不是服务商实际账单。
 - 通过暂时调低内存中的测试阈值，真实验证预算不足后转到同济，并取得 `OK` 响应。没有为测试耗尽 DeepSeek 账户，也没有改写用户的配置文件。HTTP 402 路径使用模拟响应测试。
 - 两份真实配置、余额账本、PDF 原文件和下载的第三方源码均由 `.gitignore` 排除。
+
+## 2026-10-27：逐篇 GitHub 与原仓库实验
+
+新版自动测试为 **42 passed**，新增仓库 URL、压缩包路径、Notebook 代码单元补丁、原文命令依据、真实 JSON 指标、非法/非有限数值过滤、临时 API 代理与旧 Completion 截断语义等覆盖。另在真实 Docker Desktop 中验证 tmpfs 文件向挂载产物目录的复制，未调用付费 API。
+
+逐篇流程已搜索并核验五个对应仓库，全部下载固定提交；记录见 [`examples/repository-results.json`](../examples/repository-results.json)：
+
+| 论文 | 已核实仓库 | 本次结果 |
+|---|---|---|
+| CHESS | ShayanTalaei/CHESS | 缺 BIRD 开发集及 SQLite 数据库、模式与预处理资源 |
+| KnowTrans | A11en0/KnowTrans | 缺 Jellyfish 数据、上游模型/LoRA 权重和相应训练推理条件 |
+| MAC-SQL | wbbeyourself/MAC-SQL | 缺 README 要求的 BIRD/Spider 数据包和数据库 |
+| ReAct | ysymyth/ReAct | 原 hotpotqa.ipynb 已在容器内执行，2 个真实样本，EM 为 0/2 |
+| Visual Instruction Tuning | haotian-liu/LLaVA | 缺模型权重、图像数据与 GPU 等运行条件 |
+
+ReAct 使用作者仓库自带的 `data/hotpot_dev_v1_simplified.json` 和原 `HotPotQAWrapper` 评估，保留原随机种子，循环由 500 改为 2，并在末尾导出实际计算的 EM。依赖适配为旧版 `openai<1`、`numpy<2` 等；模型通过预算代理替换为 DeepSeek，因此不是论文 GPT-3/PaLM 指标复现。0/2 是实测结果，不因结果低而改动数据或评分。
+
+真实运行暴露并解决了三类工程问题：旧 OpenAI SDK 接口不兼容；容器只读根目录下缓存应写到 tmpfs；Docker Desktop archive/cp 无法稳定读取 tmpfs 文件，改为容器内复制到挂载的产物目录。依赖失败后的修复由运行日志驱动的 LangGraph 分支完成。
+
+最终 `demo-all-papers` 的复现状态为 partial：下载5篇，完成1篇小规模原实验，其他4篇保留具体阻塞条件。完整原始命令、兼容补丁、产物和 API 用量在本地 `output/demo-all-papers/repository-experiments-*/`。历史合成数据成绩与当前原仓库结果分别保留，不混称为论文复现。

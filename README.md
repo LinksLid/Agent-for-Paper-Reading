@@ -1,155 +1,107 @@
-# PaperTeam：多智能体论文阅读与实验验证助手
+# PaperTeam：多智能体论文阅读与原仓库实验
 
-基于 **LangGraph**，将论文阅读拆分为规划、方法分析、实验分析、证据核验、实验复现和报告综合六个角色。结论附 PDF 页码、可定位的文本块及原文片段；核验失败触发定向补查，达到轮次上限后排除仍未通过的结论。
+基于 **LangGraph** 的六角色工作流：阅读规划、方法分析、实验分析、证据核验、实验复现、报告综合。阅读结论附 PDF 页码和原文证据；复现从每篇论文出发，**搜索并核对 GitHub，下载源码，依据原仓库配置、运行和评估实验**。
 
-## 已实现
+## 快速开始
 
-- 批量读取 `paper/` 中的文本型 PDF，按页分块，使用 SHA256 缓存。
-- 本地 BM25 风格检索，不依赖额外的 embedding API。
-- 方法和实验分析并行编排，共享状态；API 请求串行，适配学校接口的并发配额。
-- 引用块、所属论文和连续原文片段的程序校验，以及独立模型的语义核验。
-- 最多两轮补查，SQLite 检查点、逐节点事件和 API token/耗时记录。
-- MAC-SQL 实验适配器：下载固定提交的官方代码，重用原提示词、SQL 解析和 EX 评估函数。
-- Streamlit 界面和命令行，支持单智能体、仅分工、分工加核验三组配置。
-
-**复现范围必须准确表述：当前是 MAC-SQL 的方法级微型验证，不是论文完整结果复现。**实验使用本项目构造的 SQLite 数据库和当前 API 模型，未下载 BIRD/Spider 完整数据、未训练 SQL-Llama，也未在微型模式上启用 Selector。其他论文当前支持阅读，尚无执行适配器。
-
-## 快速开始（Windows / PowerShell）
-
-需要 Python 3.11 或更新版本，建议 Python 3.12。
+需要 Python 3.12；执行第三方仓库还需要已启动的 Linux Docker 引擎。
 
 ```powershell
 git clone https://github.com/LinksLid/Agent-for-Paper-Reading.git
 cd Agent-for-Paper-Reading
 powershell -ExecutionPolicy Bypass -File scripts/setup.ps1
+powershell -ExecutionPolicy Bypass -File scripts/start.ps1
 ```
 
-将自己的 PDF 放入 `paper/`。仓库不附带论文原文件、密钥或运行缓存。
-
-项目根目录新建 `.env`，也可从 `.env.example` 复制：
+将 PDF 放入 `paper/`，按 `.env.example` 在根目录配置备用接口：
 
 ```dotenv
 Base_url=https://your-provider.example/v1
 API_KEY=your-key
-# 可选：留空时从 /models 选择小型聊天模型
 MODEL=
-MAX_API_CALLS=30
+MAX_API_CALLS=80
 API_TIMEOUT=120
 ```
 
-兼容 `OPENAI_BASE_URL`、`OPENAI_API_KEY` 和 `OPENAI_MODEL`。API 使用兼容的 `/models` 与 `/chat/completions` 协议；凭据仅由本地客户端读取，不传入图状态或日志。选中的论文片段会发给该 API 服务，请使用允许处理这些论文的端点。服务如需校园网，请先确保本机网络可访问。
+同时兼容 `OPENAI_BASE_URL`、`OPENAI_API_KEY` 和 `OPENAI_MODEL`。论文片段和公开仓库材料会发送到该 API，请使用获准处理这些材料的服务。可按 `deepseek.env.example` 配置 `deepseek.env`，优先使用 DeepSeek，预算不足自动切到 `.env` 的同济接口。真实配置不提交 GitHub。
 
-### DeepSeek 优先与 20 元预算
+## 使用
 
-可将 DeepSeek 官方配置保存在根目录 `deepseek.env`（参见 `deepseek.env.example`），备用同济配置继续放在 `.env`。检测到 `deepseek.env` 时自动优先使用 `deepseek-flash`，余额不足、HTTP 402 或预算不足以预留下一次请求时，在同一个工作流中改用 `.env` 的接口。没有 `deepseek.env` 时直接读取 `.env`。可通过 `--provider tongji` 显式使用备用接口。
-
-累计预算上限为 20 元，可通过 `DEEPSEEK_BUDGET_CNY` 调低；不能调高。每次付费调用前查询官方人民币余额，并根据输入 UTF-8 字节上界、输出 token 上限和官方高峰费率保守预留费用。使用量返回后按高峰费率结算预留；超时等无法取得用量的请求保留全额预留。记录持久化在 `.cache/deepseek-budget.sqlite`，跨重启和本机多进程共享；不要删除该文件来重置预算。
-
-预算记录是保守上界，可能早于实际花满 20 元时切换；账单以服务商为准。账户内其他客户端引起的余额下降也计入保护。费率快照来自 [DeepSeek 官方价格表](https://api-docs.deepseek.com/zh-cn/quick_start/pricing/)，日期为 2026-10-26，Flash 高峰输入/输出为每百万 token 2/8 元，Pro 为 9/27 元；价格调整后需同步维护 `budget.py`。无法查询人民币余额时保守切换备用接口。切换事件、实际使用的模型和预算信息写入本地日志；预算切换自动测试使用模拟响应，不消耗真实账户来验证。
-
-预算数据库和两份实际配置均不提交 GitHub。账户充值、手动删除预算库或更换密钥会改变预算追踪的前提；此机制不是服务商账户级消费限额。
+界面默认启用「查找 GitHub 并尝试论文实验」。旧阅读结果可在 **论文实验复现** 页签单独启动，无需重做阅读分析。逐篇展示仓库、提交、计划、命令、产物、实测指标或具体缺口。
 
 ```powershell
-# 启动本机界面
-powershell -ExecutionPolicy Bypass -File scripts/start.ps1
-
-# 仅解析论文，不调用 API
+# 仅本地解析 PDF，不调用 API
 .venv/Scripts/python.exe -m paperteam index
-
-# 查看可用模型
+# 模型列表；--provider tongji 可显式使用备用接口
 .venv/Scripts/python.exe -m paperteam models
-
-# 建议先跑同一任务领域的两篇论文
-.venv/Scripts/python.exe -m paperteam read --paper MAC-SQL --paper CHESS --reproduce --samples 3
-
-# 阅读文件夹里的全部论文
-.venv/Scripts/python.exe -m paperteam read
-
-# 独立执行 MAC-SQL 微型实验（1 至 6 个问题）
-.venv/Scripts/python.exe -m paperteam reproduce --samples 6
+# 阅读和原仓库实验
+.venv/Scripts/python.exe -m paperteam read --paper MAC-SQL --paper CHESS --reproduce --samples 2
+# 单独执行实验流程，不重复阅读
+.venv/Scripts/python.exe -m paperteam reproduce --paper ReAct --samples 2
+# 处理 paper 中的每篇论文
+.venv/Scripts/python.exe -m paperteam reproduce --samples 2
 ```
 
-Linux/macOS 可以使用 `python3 -m venv .venv`、`.venv/bin/pip install -r requirements.txt` 和 `.venv/bin/streamlit run app.py`。
+`--samples` 是目标样本数，仅在原实验入口可控制样本量时生效。不会生成玩具数据凑样本。
 
-## 协作流程
+## 工作流
 
-```mermaid
-flowchart TD
-    A[PDF 解析与按页索引] --> P[阅读规划员]
-    P --> M[方法分析员]
-    P --> E[实验分析员]
-    M --> V[证据核验员]
-    E --> V
-    V -->|不通过且未达补查上限| R[定向检索与重新分析]
-    R --> V
-    V -->|核验结束| X[实验复现员]
-    X --> W[综合报告员]
-    W --> Y[比较结论再次核验与报告导出]
-```
+阅读：PDF 按页索引 → 规划 → 方法/实验并行分析 → 原文定位与语义核验 → 定向补查 → 逐篇实验 → 报告与比较结论核验。
 
-规划员确定检索维度；方法和实验分析员获取不同证据；核验员的反馈决定补查内容。复现员评估固定适配器的可行性，并调用有边界的运行器。报告员根据已接受的结论提出比较，比较结论也经过校验后才进入报告。程序节点和六种角色不一一对应。
+实验是独立 LangGraph 子图：**搜索 → README 对应关系核验 → 下载固定提交 → 检查仓库 → 制定原实验计划 → 容器执行 → 核对产物**。命令失败后，根据真实日志修复最多一次，再尝试执行。
 
-## 结果在哪里
+既检查论文内的链接，也按准确标题、方法名和作者搜索；README 必须提供对应关系的原文，排除被引用的依赖库和无关同名项目。搜索失败不会被解释为论文没有代码。搜索和源码缓存复用一天，复用源码时核对文件哈希。GitHub 公共 REST 额度不足时，可用只读 Git ref 查询获取公开仓库提交。
 
-每次运行生成独立的 `output/<run-id>/`：
+## 如何运行原实验
 
-| 文件 | 用途 |
+使用原仓库脚本或 Notebook、真实数据与评估逻辑。允许记录清楚的依赖版本、API、路径、样本上限和结果导出兼容补丁；不改算法、数据标签、金标准或评分函数来制造成功。Notebook 直接执行修改后的代码单元，保留输出。
+
+Docker 使用只读根目录、2 CPU、4GB 内存、进程数限制和最小权限。只挂载对应源码（只读）和本次输出目录；主项目、PDF、两份真实配置和 Docker socket 均不挂载。容器结束后删除，源码和日志保留。Docker 不可用时保留计划和原因，不回退到无操作系统隔离的本机执行。
+
+原代码只获得临时 API 代理 token，真实密钥保留在主进程；代理继续执行累计20元预算和调用次数限制。支持非流式文本 chat/completions、旧 completions 与 Azure 风格 chat 路径；暂不支持 embedding、视觉、工具调用和流式。容器未配置 GPU，不自动下载大型模型权重。缺数据、权重或其他服务时，逐项列出名称和路径。
+
+| 状态 | 含义 |
 |---|---|
-| `report.md` | 中文阅读报告及证据脚注 |
-| `state.json` | 阅读计划、所有结论、核验历史和节点事件 |
-| `manifest.json` | 模型、论文哈希、运行配置、耗时和 token 总量 |
-| `api_usage.jsonl` | 每次逻辑调用的角色、请求次数、状态、用量、耗时 |
-| `checkpoints.sqlite` | LangGraph 持久化检查点，便于检查中间状态 |
-| `workflow.mmd` | 本次实际编排图 |
-| `comparison_audit.json` | 比较结论核验记录 |
-| `reproduction/reproduction.json` | 源码版本、实验范围、逐样本分数及限制 |
-| `reproduction/cases.json` | 问题、参考 SQL、预测 SQL、执行错误和修正轨迹 |
+| completed | 原实验运行并产生实际产物；基准与评估任务还需有可解析指标 |
+| executed | 已运行，但产物或指标不足以确认完成 |
+| smoke_passed | 仅环境、帮助命令或单元测试通过 |
+| blocked | 缺少明确的运行前提 |
+| failed | 某阶段实际失败，保留日志与原因 |
+| not_found | 本轮未核实到对应仓库，不代表全球没有实现 |
 
-检查点可用于调试；当前界面未提供跨进程继续运行按钮。运行失败会保存失败清单及已有日志，不伪造报告或实验分数。
+源码已下载与实验已完成分别显示。不同模型、小规模子集或兼容补丁产生的结果不自动宣称复现论文完整指标。旧版 MAC-SQL 合成数据库验证代码和示例仅作历史记录，**已不是当前论文复现流程**。
 
-## 实验复现的实现边界
+## 结果文件
 
-MAC-SQL 来源锁定在 [`config/macsql.lock.json`](config/macsql.lock.json)。使用 GitHub 指定提交的源码压缩包下载，校验解压路径、大小和关键文件 SHA256，不自动运行 README 命令或模型生成的 shell。
+阅读结果在 `output/<run-id>/`：`report.md`、`state.json`、`manifest.json`、SQLite 检查点、API 用量与实际编排图。实验按论文 ID 单独保存：
 
-适配器读取官方 `core/const.py` 的字符串提示词，从校验过的源码中加载 `parse_sql_from_string` 与 `execute_sql` 两个函数；不执行整个仓库模块的导入或安装脚本。新版兼容 API 和 LangGraph 调度由本项目实现。
+| 文件 | 内容 |
+|---|---|
+| discovery.json | 搜索、候选、README 对应依据 |
+| source.json | 仓库、提交、压缩包与文件哈希 |
+| inspection.json | 实验入口、依赖、数据等检查 |
+| plan.json / repaired_plan.json | 初始计划与日志驱动的修复计划 |
+| progress.json / result.json | 当前阶段与最终结果 |
+| commands.json / execution_history.json | 真实命令、退出码、输出和耗时 |
+| patches/ | 兼容性修改后的副本，原下载源码不变 |
+| artifacts/ | 原实验产生的结果与已执行 Notebook |
 
-小型实验包含单表筛选、连接、聚合、子查询、空关联和 HAVING 六类问题；每条预测 SQL 在两个数据库变体上测试。参考 SQL 仅提供给评分阶段。数据库连接强制只读，禁止 ATTACH、写操作和扩展加载，查询有执行时限。
+指标只从实际 JSON 产物解析数值，不接受 LLM 估算。密钥、论文、源码下载、依赖环境和运行缓存均不提交。
 
-同时记录官方的结果集合 EX 与多重集比较。它们仍不能覆盖所有 SQL 等价情形，尤其是排序语义。基线和分解修正流程使用相同模型、模式和问题，但提示词长度、示例、调用次数不同；**不能用该微型实验直接证明多智能体更优，也不能与论文榜单分数比较**。
+## DeepSeek 20元预算
 
-## 课堂对照实验
+存在 `deepseek.env` 时优先用 deepseek-flash。每次付费调用前查人民币余额，按输入字节上界、输出 token 上限和高峰费率保守预留；余额不足、HTTP 402 或预算不足时，同一工作流改用 `.env`。账本为 `.cache/deepseek-budget.sqlite`，跨重启和进程共享，不要删除来重置预算。
 
-```powershell
-.venv/Scripts/python.exe -m paperteam read --paper MAC-SQL --paper CHESS --mode single
-.venv/Scripts/python.exe -m paperteam read --paper MAC-SQL --paper CHESS --mode multi
-.venv/Scripts/python.exe -m paperteam read --paper MAC-SQL --paper CHESS --mode verified
-```
+上限20元，可用 `DEEPSEEK_BUDGET_CNY` 调低；保守记账可能提前切换，账单以服务商为准。无法确认人民币余额也切到备用接口。费率快照日期2026-10-26，参考 [官方价格](https://api-docs.deepseek.com/zh-cn/quick_start/pricing/)，价格变化需维护 budget.py。切换记录实际模型，不能当成同模型控制实验。
 
-三组都保留基础的原文定位校验，`verified` 额外增加语义核验和补查。当前它们是配置对照，并非严格等预算消融：检索材料、提示词和调用次数不同。正式报告应人工标注事实正确率、引用支持率、关键点覆盖率，并同时报告 token 与耗时。详见 [评测方案](docs/evaluation.md) 和 [六人分工与汇报提纲](docs/team-project.md)。
+## 汇报与测试
 
-## 开发与测试
+[六人分工](docs/team-project.md)、[评测方案](docs/evaluation.md)、[实际验证记录](docs/validation.md)。阅读配置支持 single、multi、verified；正式比较应人工标注正确率、证据支持率、覆盖率并报告 token 和时间，当前配置不是严格等预算消融。
 
 ```powershell
 .venv/Scripts/python.exe -m pytest -q
 ```
 
-自动测试不调用真实 API。覆盖引用错误、核验补查、检查点、配额控制、格式重试、源码校验、只读 SQL、修正上限和界面加载。真实 API 的运行情况单独记录，不能把测试夹具结果当成实际论文分析或实验成绩。当前验证结果见 [实际验证记录](docs/validation.md)，运行清单与微型实验逐样本结果保存在 `examples/`。
+自动测试不调用实际付费 API，也不执行第三方仓库。真实运行单独记录。PDF 当前只支持文本抽取；双栏、表格、图像和公式仍需人工核对，同一模型的多个角色可能共享偏差。
 
-## 当前限制
-
-- 只解析可提取文本的 PDF；双栏顺序、表格、图片与公式需要人工复核，暂无 OCR 或视觉解析。
-- 原文定位校验不代表结论语义一定正确；同一底层模型的多个角色可能共享偏差。
-- 每个分析角色默认只提取少量主要结论，报告不等同于完整综述。
-- 当前检索没有重排器，中文问题对英文全文的检索依赖规划员提供英文关键词。
-- 自动模型选择以名称匹配为依据，重要实验应显式固定 `MODEL`。
-- 学校 API 可能有网络、并发和速率限制；程序采用单请求并发、有限次数退避重试与调用预算。
-
-## 官方参考
-
-- [LangGraph 图与状态 API](https://docs.langchain.com/oss/python/langgraph/graph-api)
-- [LangGraph 持久化](https://docs.langchain.com/oss/python/langgraph/persistence)
-- [MAC-SQL 官方仓库](https://github.com/wbbeyourself/MAC-SQL)
-- [MAC-SQL 论文](https://aclanthology.org/2025.coling-main.36/)
-- [CHESS 官方仓库](https://github.com/ShayanTalaei/CHESS)
-
-第三方源码保留在本地 `external/`，不作为本项目原创代码提交；使用时请遵守上游条款。
+官方参考：[LangGraph](https://docs.langchain.com/oss/python/langgraph/graph-api)、[ReAct](https://github.com/ysymyth/ReAct)、[MAC-SQL](https://github.com/wbbeyourself/MAC-SQL)、[CHESS](https://github.com/ShayanTalaei/CHESS)、[KnowTrans](https://github.com/A11en0/KnowTrans)、[LLaVA](https://github.com/haotian-liu/LLaVA)。第三方源码不作为本项目原创代码分发，使用时遵守上游条款。

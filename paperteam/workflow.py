@@ -9,7 +9,8 @@ from langgraph.graph import StateGraph, START, END
 from .corpus import ingest, retrieve, evidence_errors
 from .llm import LLM
 from .models import Analysis, Plan, Review, ReportDraft
-from .reproduction import dump, run_macsql
+from .reproduction import dump
+from .repository_experiments import run_repository_experiments, reproduction_markdown
 
 
 class State(TypedDict, total=False):
@@ -119,7 +120,9 @@ def render_report(title, state, comparisons, questions, llm):
     lines.extend("- " + q.replace("\n", " ") for q in questions)
     lines.extend(["", "## 实验复现", ""])
     reproduction = state.get("reproduction", {})
-    if reproduction.get("status") == "completed":
+    if reproduction.get("kind") == "repository_experiments":
+        lines.extend(reproduction_markdown(reproduction))
+    elif reproduction.get("status") == "completed":
         lines.extend(["完成 MAC-SQL 方法级微型验证；未复现论文完整基准。", "",
                       f"- 样本：{reproduction['samples']}；数据库变体：{reproduction['database_variants']}。",
                       f"- 单次基线 EX：{reproduction['baseline_ex']:.1%}；分解与修正流程 EX：{reproduction['multi_ex']:.1%}。",
@@ -219,16 +222,10 @@ def build_workflow(llm: LLM, root: Path, run_dir: Path, checkpointer=None,
     def reproduce_node(state):
         if not reproduce:
             return {"reproduction": {"status": "disabled"}, "events": event("reproducer", status="disabled")}
-        matching = [p for p in state["papers"] if "mac-sql" in p["filename"].lower() and
-                    any(u.lower() == "https://github.com/wbbeyourself/mac-sql" for u in p["github_urls"])]
-        if not matching:
-            result = {"status": "unsupported", "reason": "当前只有 MAC-SQL 具有已校验的运行适配器；其余论文仅阅读分析。"}
-        else:
-            try:
-                result = run_macsql(llm, root, run_dir / "reproduction", samples=samples)
-            except Exception as error:
-                # Preserve the reading result when a repository/network/experiment fails.
-                result = {"status": "failed", "reason": f"实验未完成（{type(error).__name__}），无可报告实验分数。"}
+        try:
+            result = run_repository_experiments(state["papers"], llm, root, run_dir / "reproduction", samples=samples)
+        except Exception as error:
+            result = {"status": "failed", "reason": f"仓库实验流程未完成（{type(error).__name__}），详见 reproduction 目录。"}
         return {"reproduction": result, "events": event("reproducer", status=result["status"])}
 
     def report_node(state):

@@ -6,6 +6,7 @@ from pathlib import Path
 import sqlite3
 import time
 import uuid
+import re
 
 from langgraph.checkpoint.sqlite import SqliteSaver
 
@@ -13,6 +14,7 @@ from .config import Settings
 from .llm import LLM
 from .reproduction import dump
 from .workflow import build_workflow
+from .repository_experiments import run_repository_experiments, reproduction_markdown
 
 
 def run(settings: Settings, paths: list[Path], question: str, mode="verified", max_repairs=1,
@@ -57,5 +59,34 @@ def run(settings: Settings, paths: list[Path], question: str, mode="verified", m
         dump(run_dir / "manifest.json", {"status": "failed", "error_type": type(error).__name__,
                                           "api_calls": llm.calls, "seconds": round(time.monotonic() - started, 3)})
         raise
+    finally:
+        llm.close()
+
+
+def reproduce_saved(settings: Settings, run_dir: Path, samples=3, progress=None):
+    run_dir = run_dir.resolve()
+    if not run_dir.is_relative_to((settings.root / "output").resolve()):
+        raise ValueError("只能对当前项目的阅读结果执行复现")
+    state = json.loads((run_dir / "state.json").read_text(encoding="utf-8"))
+    manifest = json.loads((run_dir / "manifest.json").read_text(encoding="utf-8"))
+    folder = run_dir / ("repository-experiments-" + datetime.now().strftime("%Y%m%d-%H%M%S"))
+    llm = LLM(settings, folder)
+    try:
+        result = run_repository_experiments(state["papers"], llm, settings.root, folder, samples, progress)
+        state["reproduction"] = result
+        section = "## 实验复现\n\n" + "\n".join(reproduction_markdown(result)) + "\n"
+        state["report"] = re.sub(r"## 实验复现\n.*?(?=\n## |\Z)", lambda _: section, state["report"], flags=re.S)
+        manifest["reproduce"] = True
+        manifest["reproduction_status"] = result["status"]
+        manifest["reproduction_output"] = str(folder)
+        manifest["reproduction_seconds"] = result["seconds"]
+        manifest["api_calls"] += llm.calls
+        manifest["total_tokens"] += sum(r.get("usage", {}).get("total_tokens", 0) for r in llm.records)
+        manifest["models_used"] = list({(m["provider"], m["model"]): m for m in manifest.get("models_used", []) + llm.models_used}.values())
+        state["report"] = re.sub(r"API 调用：\d+", f"API 调用：{manifest['api_calls']}", state["report"])
+        dump(run_dir / "state.json", state)
+        dump(run_dir / "manifest.json", manifest)
+        (run_dir / "report.md").write_text(state["report"], encoding="utf-8")
+        return result
     finally:
         llm.close()

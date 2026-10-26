@@ -7,8 +7,9 @@ import sys
 from .config import ROOT, Settings
 from .corpus import ingest
 from .llm import LLM
-from .reproduction import checkout, run_macsql
+from .reproduction import checkout
 from .runner import run
+from .repository_experiments import run_repository_experiments
 
 
 def main():
@@ -31,11 +32,13 @@ def main():
     read.add_argument("--provider", choices=["auto", "deepseek", "tongji"], default="auto")
     read.add_argument("--max-calls", type=int)
     read.add_argument("--run-id", default="")
-    repro = sub.add_parser("reproduce", help="独立运行 MAC-SQL 方法级实验")
+    repro = sub.add_parser("reproduce", help="逐篇搜索GitHub、下载并尝试原仓库实验")
+    repro.add_argument("--paper-dir", type=Path, default=ROOT / "paper")
+    repro.add_argument("--paper", action="append")
     repro.add_argument("--samples", type=int, choices=range(1, 7), default=3)
     repro.add_argument("--model", default="")
     repro.add_argument("--provider", choices=["auto", "deepseek", "tongji"], default="auto")
-    repro.add_argument("--max-calls", type=int, default=20)
+    repro.add_argument("--max-calls", type=int, default=80)
     args = parser.parse_args()
     if args.command == "index":
         papers = ingest(sorted(args.paper_dir.glob("*.pdf")), ROOT / ".cache/papers")
@@ -60,9 +63,14 @@ def main():
         output = ROOT / "output" / ("reproduction-" + datetime.now().strftime("%Y%m%d-%H%M%S"))
         llm = LLM(settings, output)
         try:
-            result = run_macsql(llm, ROOT, output, args.samples)
+            paths = sorted(args.paper_dir.glob("*.pdf"))
+            if args.paper:
+                paths = [p for p in paths if any(pattern.lower() in p.name.lower() for pattern in args.paper)]
+            papers = ingest(paths, ROOT / ".cache/papers")
+            result = run_repository_experiments(papers, llm, ROOT, output, args.samples,
+                         progress=lambda stage, paper: print(f"{paper}：{stage}", flush=True))
             print(json.dumps({"status": result["status"], "output": str(output),
-                              "baseline_ex": result.get("baseline_ex"), "multi_ex": result.get("multi_ex")}, ensure_ascii=False))
+                              "downloaded": result["downloaded"], "completed": result["completed"]}, ensure_ascii=False))
         finally:
             llm.close()
     else:
