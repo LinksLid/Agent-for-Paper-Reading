@@ -411,6 +411,12 @@ def reproduction_markdown(result):
         repo = f"[源码]({paper['repository']})" if paper.get("repository") else "尚未核实"
         lines.append(f"| {name} | {repo} | {STATUS_LABELS.get(paper['status'], paper['status'])} |")
     lines.append("")
+    if result.get("comparisons"):
+        lines += ["**ReAct 文本接口兼容性对照**：使用相同任务，续写约束会改变模型输入，不代表原论文完全相同的设置。", "",
+                  "| 任务 | 原调用方式成功数 | 续写兼容成功数 |", "|---|---|---|"]
+        for row in result["comparisons"]:
+            lines.append(f"| {row['task']} | {row['baseline_successes']}/{row['episodes']} | {row['continuation_successes']}/{row['episodes']} |")
+        lines.append("")
     for paper in result.get("papers", []):
         lines.extend(["### " + paper["filename"], ""])
         if paper.get("commit"):

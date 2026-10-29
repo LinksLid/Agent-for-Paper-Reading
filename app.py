@@ -1,16 +1,18 @@
 from dataclasses import replace
 import json
+import re
 from pathlib import Path
 
 import streamlit as st
 
 from paperteam.config import ROOT, Settings
-from paperteam.runner import run, reproduce_saved
+from paperteam.runner import run, reproduce_saved, explain_saved
+from paperteam.reading_view import paper_guide
 from paperteam.repository_experiments import STATUS_LABELS
 
 st.set_page_config(page_title="PaperTeam · 多智能体论文阅读", page_icon="📚", layout="wide")
 st.title("PaperTeam")
-st.caption("LangGraph 多智能体论文精读 · 原文证据核验 · GitHub 搜索与原仓库实验")
+st.caption("先讲清任务，再看懂方法与改进 · 原文证据核验 · 原仓库实验")
 
 with st.sidebar:
     st.subheader("本次阅读")
@@ -34,14 +36,19 @@ with st.sidebar:
     max_repairs = st.slider("最多补查轮次", 0, 2, 1, disabled=mode != "verified")
     st.caption("优先读取 deepseek.env，累计最多 20 元；备用接口读取 .env。缺少 deepseek.env 时直接使用 .env。")
 
-question = st.text_area("你想从这些论文中了解什么？", value="比较这些论文的智能体分工、协作机制与实验设计，指出结论的证据和局限。", height=95)
-start = st.button("开始协作阅读", type="primary", disabled=not selected or not question.strip())
+saved = sorted((ROOT / "output").glob("*/manifest.json"), key=lambda p: p.stat().st_mtime, reverse=True) if (ROOT / "output").exists() else []
+complete = [p.parent for p in saved if json.loads(p.read_text(encoding="utf-8")).get("status") == "completed"
+            and (p.parent / "report.md").exists()]
+with st.expander("配置并开始新的阅读", expanded=not bool(complete)):
+    question = st.text_area("你想从这些论文中了解什么？", value="逐篇讲清研究任务的输入输出，用一个例子解释方法流程；对照原有做法说明具体改进，并指出作者的实验证据与局限。", height=95)
+    start = st.button("开始协作阅读", type="primary", disabled=not selected or not question.strip())
 if start:
     try:
         settings = replace(Settings.load(model=model.strip(), provider="tongji" if provider_label == "仅同济" else "auto"), max_calls=int(max_calls))
         with st.status("正在阅读论文", expanded=True) as status:
             labels = {"ingest": "建立论文证据索引", "planner": "制定阅读计划", "method_analyst": "分析方法",
                       "experiment_analyst": "分析实验", "verifier": "核验结论与原文", "targeted_repair": "根据反馈定向补查",
+                      "paper_explainer": "整理任务、方法、改进讲解并核验",
                       "reproducer": "处理实验复现", "reporter": "生成有引用的阅读报告", "single_reader": "完成单智能体阅读"}
             def progress(node, values):
                 st.write("✓ " + labels.get(node, node))
@@ -49,29 +56,47 @@ if start:
                                 reproduction_backend=reproduction_backend)
             st.session_state["result_dir"] = str(output)
             status.update(label="阅读完成", state="complete", expanded=False)
+        st.rerun()
     except Exception as error:
         message = str(error) if isinstance(error, (ValueError, RuntimeError)) else type(error).__name__
         st.error("运行停止：" + message)
 
-saved = sorted((ROOT / "output").glob("*/manifest.json"), key=lambda p: p.stat().st_mtime, reverse=True) if (ROOT / "output").exists() else []
-complete = [p.parent for p in saved if json.loads(p.read_text(encoding="utf-8")).get("status") == "completed"
-            and (p.parent / "report.md").exists()]
 if complete:
     default_dir = Path(st.session_state.get("result_dir", str(complete[0])))
     index = complete.index(default_dir) if default_dir in complete else 0
     output = st.selectbox("查看已完成的阅读", complete, index=index, format_func=lambda p: p.name)
     manifest = json.loads((output / "manifest.json").read_text(encoding="utf-8"))
     state = json.loads((output / "state.json").read_text(encoding="utf-8"))
-    a, b, c, d = st.columns(4)
-    a.metric("通过核验的结论", manifest["accepted_claims"])
-    b.metric("API 调用", manifest["api_calls"])
-    c.metric("阅读运行时间", f"{manifest['seconds']:.1f}s")
-    d.metric("实验状态", STATUS_LABELS.get(manifest["reproduction_status"], manifest["reproduction_status"]))
-    report_tab, reproduction_tab, evidence_tab, audit_tab = st.tabs(["阅读报告", "论文实验复现", "原文证据", "协作与核验记录"])
+    guide_tab, report_tab, reproduction_tab, evidence_tab, audit_tab = st.tabs(["先读懂论文", "完整阅读报告", "论文实验复现", "原文证据", "协作与核验记录"])
+    with guide_tab:
+        guides = {g["paper_id"]: g for g in state.get("paper_guides", [])}
+        selected_paper = st.selectbox("先读哪篇论文", state["papers"], format_func=lambda p: p["filename"])
+        if st.button("更新这篇论文的讲解" if guides else "生成全部论文的讲解", type="primary"):
+            try:
+                settings = replace(Settings.load(model=model.strip(), provider="tongji" if provider_label == "仅同济" else "auto"), max_calls=int(max_calls))
+                labels = {"guide_draft": "分问题阅读并整理讲解", "guide_verify": "核验讲解与教学示例", "guide_repair": "按缺口定向补查"}
+                with st.status("正在生成可讲明白的论文说明", expanded=True) as status:
+                    explain_saved(settings, output, max_repairs=max_repairs,
+                                  progress=lambda stage, paper: st.write(paper + "：" + labels.get(stage, stage)),
+                                  paper_ids=[selected_paper['paper_id']] if guides else None)
+                    status.update(label="论文讲解已更新", state="complete")
+                st.rerun()
+            except Exception as error:
+                st.error("讲解更新停止：" + (str(error) if isinstance(error, (ValueError, RuntimeError)) else type(error).__name__))
+        st.caption("讲解更新只调用阅读接口；保留已有实验结果。教学示例与论文原文、真实实验分别标注。")
+        if guides:
+            guide = guides.get(selected_paper["paper_id"])
+            if guide:
+                experiment = next((p for p in state.get("reproduction", {}).get("papers", []) if p["paper_id"] == selected_paper["paper_id"]), None)
+                paper_guide(guide, selected_paper, ROOT / ".cache/pdf-pages", experiment)
+            else:
+                st.info("这篇论文尚未生成讲解，可通过上方按钮补齐。")
+        else:
+            st.info("这份历史结果仍是结论列表。生成讲解后，这里将展示输入输出、教学例子、方法流程和改进对照。")
     with report_tab:
         report = (output / "report.md").read_text(encoding="utf-8")
         st.download_button("下载 Markdown 报告", report, file_name="paperteam-report.md", mime="text/markdown")
-        st.markdown(report)
+        st.markdown(re.sub(r"```mermaid\n.*?```", "_流程图请见“先读懂论文”页。_", report, flags=re.S))
     with reproduction_tab:
         st.write("从当前阅读结果中的论文查找 GitHub、下载源码并执行仓库实验，无需重复论文阅读。")
         if st.button("为这些论文执行 GitHub 搜索与实验", type="primary"):
@@ -126,7 +151,13 @@ if complete:
                         st.caption(f"PDF p.{chunk['page']} · {chunk['chunk_id']}")
                         st.text(chunk["text"])
     with audit_tab:
+        a, b, c, d = st.columns(4)
+        a.metric("基础结论通过核验", manifest["accepted_claims"])
+        b.metric("累计 API 调用", manifest["api_calls"])
+        c.metric("原阅读运行时间", f"{manifest['seconds']:.1f}s")
+        d.metric("实验状态", STATUS_LABELS.get(manifest["reproduction_status"], manifest["reproduction_status"]))
         st.json({"plan": state.get("plan"), "events": state["events"], "review_history": state.get("review_history"),
+                 "paper_guides": state.get("paper_guides", []),
                  "reproduction": state.get("reproduction"), "manifest": manifest})
 else:
     st.info("选择论文并开始阅读。运行完成后，这里会显示带原文证据的报告和协作记录。")

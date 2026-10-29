@@ -1,0 +1,137 @@
+{
+  "date": "2026-10-29",
+  "kind": "paper_explanations",
+  "model": "deepseek-flash",
+  "successful_refresh_api_calls": 68,
+  "successful_refresh_seconds": 559.452,
+  "paper_count": 5,
+  "accepted_facts": 180,
+  "papers": [
+    {
+      "paper_id": "895fe58264",
+      "filename": "CHESS：Contextual Harnessing for Efficient SQL Synthesis.pdf",
+      "status": "ready",
+      "coverage": {
+        "sections": {
+          "task": true,
+          "inputs_outputs": true,
+          "motivation": true,
+          "method": true,
+          "connections": true,
+          "improvements": true,
+          "results": true,
+          "example": true
+        },
+        "ready": 8,
+        "total": 8,
+        "missing": []
+      },
+      "accepted_facts": 35,
+      "excluded_facts": 0,
+      "verified_steps": 5,
+      "verified_improvements": 3
+    },
+    {
+      "paper_id": "ee0f3d167f",
+      "filename": "KnowTrans- Boosting Transferability of Data Preparation LLMs via Knowledge Augmentation.pdf",
+      "status": "ready",
+      "coverage": {
+        "sections": {
+          "task": true,
+          "inputs_outputs": true,
+          "motivation": true,
+          "method": true,
+          "connections": true,
+          "improvements": true,
+          "results": true,
+          "example": true
+        },
+        "ready": 8,
+        "total": 8,
+        "missing": []
+      },
+      "accepted_facts": 35,
+      "excluded_facts": 3,
+      "verified_steps": 7,
+      "verified_improvements": 2
+    },
+    {
+      "paper_id": "41241a9870",
+      "filename": "MAC-SQL：A Multi-Agent Collaborative Framework for Text-to-SQL.pdf",
+      "status": "ready",
+      "coverage": {
+        "sections": {
+          "task": true,
+          "inputs_outputs": true,
+          "motivation": true,
+          "method": true,
+          "connections": true,
+          "improvements": true,
+          "results": true,
+          "example": true
+        },
+        "ready": 8,
+        "total": 8,
+        "missing": []
+      },
+      "accepted_facts": 37,
+      "excluded_facts": 0,
+      "verified_steps": 6,
+      "verified_improvements": 3
+    },
+    {
+      "paper_id": "f285b0971a",
+      "filename": "ReAct- Synergizing Reasoning and Acting in Language Models.pdf",
+      "status": "ready",
+      "coverage": {
+        "sections": {
+          "task": true,
+          "inputs_outputs": true,
+          "motivation": true,
+          "method": true,
+          "connections": true,
+          "improvements": true,
+          "results": true,
+          "example": true
+        },
+        "ready": 8,
+        "total": 8,
+        "missing": []
+      },
+      "accepted_facts": 35,
+      "excluded_facts": 1,
+      "verified_steps": 6,
+      "verified_improvements": 2
+    },
+    {
+      "paper_id": "dc8bace378",
+      "filename": "Visual Instruction Tuning.pdf",
+      "status": "ready",
+      "coverage": {
+        "sections": {
+          "task": true,
+          "inputs_outputs": true,
+          "motivation": true,
+          "method": true,
+          "connections": true,
+          "improvements": true,
+          "results": true,
+          "example": true
+        },
+        "ready": 8,
+        "total": 8,
+        "missing": []
+      },
+      "accepted_facts": 38,
+      "excluded_facts": 1,
+      "verified_steps": 5,
+      "verified_improvements": 3
+    }
+  ],
+  "experiments_rerun": false,
+  "limitations": [
+    "通过模型语义核验不等于人工确认无误",
+    "八项齐备仅表示讲解结构满足检查条件，不表示覆盖全文",
+    "尚未进行未读论文同学的理解测试"
+  ]
+}

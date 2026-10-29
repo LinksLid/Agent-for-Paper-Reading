@@ -11,6 +11,7 @@ from .llm import LLM
 from .models import Analysis, Plan, Review, ReportDraft
 from .reproduction import dump
 from .repository_experiments import run_repository_experiments, reproduction_markdown
+from .understanding import generate_explanations, explanation_markdown
 
 
 class State(TypedDict, total=False):
@@ -27,6 +28,8 @@ class State(TypedDict, total=False):
     review_history: list[dict]
     reproduction: dict
     report: str
+    paper_guides: list[dict]
+    guide_api_calls: int
     events: Annotated[list[dict], operator.add]
 
 
@@ -91,17 +94,23 @@ def render_report(title, state, comparisons, questions, llm):
              "模型：" + "、".join(f"`{p['provider']}/{p['model']}`" for p in getattr(llm, "models_used", []) or [{"provider": "test", "model": llm.model}]) + "。页码均为 PDF 物理页码，从 1 开始。", "",
              "文本抽取不保证完整还原双栏、表格和公式；核验为原文定位与模型语义检查，仍需人工抽查。", ""]
 
-    def claim_line(claim):
+    def evidence_refs(evidence_items):
         refs = []
-        for evidence in claim["evidence"]:
+        for evidence in evidence_items:
             key = (evidence["chunk_id"], evidence["quote"])
             if key not in sources:
                 sources[key] = f"S{len(sources) + 1:03d}"
             refs.append(f"[^{sources[key]}]")
-        return "- " + claim["text"].replace("\n", " ") + " " + "".join(refs)
+        return "".join(refs)
 
+    def claim_line(claim):
+        return "- " + claim["text"].replace("\n", " ") + " " + evidence_refs(claim["evidence"])
+
+    guides = {g["paper_id"]: g for g in state.get("paper_guides", [])}
     for paper_id, paper in papers.items():
         lines.extend(["## " + paper["filename"], ""])
+        if paper_id in guides:
+            lines.extend([explanation_markdown(guides[paper_id], evidence_refs), "### 补充的已核验结论", ""])
         claims = [c for c in state["accepted"] if c["paper_id"] == paper_id]
         for kind, label in [("background", "背景"), ("method", "方法"),
                             ("experiment", "实验"), ("limitation", "局限")]:
@@ -144,7 +153,7 @@ def render_report(title, state, comparisons, questions, llm):
 
 
 def build_workflow(llm: LLM, root: Path, run_dir: Path, checkpointer=None,
-                   mode="verified", max_repairs=1, reproduce=False, samples=3, reproduction_backend="api"):
+                   mode="verified", max_repairs=1, reproduce=False, samples=3, reproduction_backend="api", explain=False):
     def ingest_node(state):
         papers = ingest([Path(p) for p in state["paths"]], root / ".cache/papers")
         return {"papers": papers, "events": event("ingest", papers=len(papers))}
@@ -163,9 +172,10 @@ def build_workflow(llm: LLM, root: Path, run_dir: Path, checkpointer=None,
         prompt = (f"整体阅读问题：{question}\n当前论文 paper_id={paper['paper_id']}。你的角色是{role}。"
                   "只解释当前论文与整体问题相关的事实，跨论文比较由后续报告员负责。"
                   "禁止评论输入是否包含其他论文，禁止把检索缺口当成论文自身的局限。"
-                  f"生成 2 至 3 条精确、可核验的结论；kind 主要使用 {kind}，必要时使用 limitation。"
+                  f"生成 4 至 6 条精确、可核验的结论；kind 主要使用 {kind}，必要时使用 background 或 limitation。"
                   "每条只能包含一个主要判断，并附一段足够支持该判断的原文。不得引用其他论文的结论。"
-                  + ("只分析实验设置、结果、消融和实验局限，不要复述系统组成。" if kind == "experiment" else "聚焦方法、假设和协作机制。") +
+                  + ("分析任务数据、指标、可比基线、主结果、组件消融和实验局限；至少说明一条实验设置和一条结果，不只抄总体分数。" if kind == "experiment" else
+                     "优先解释研究任务的输入输出、已有做法的瓶颈、方法的数据流与具体改动；不要只罗列模块名。不同论文不应被强行解释为多智能体。") +
                   "实验结论注明这是论文报告的数据，避免当成独立验证。\n补查反馈：" + feedback +
                   "\n检索材料：\n" + json.dumps(context, ensure_ascii=False))
         return [{**c.model_dump(), "origin_role": role} for c in llm.structured(role, prompt, Analysis).claims]
@@ -230,6 +240,13 @@ def build_workflow(llm: LLM, root: Path, run_dir: Path, checkpointer=None,
             result = {"status": "failed", "reason": "仓库实验流程未完成：" + reason}
         return {"reproduction": result, "events": event("reproducer", status=result["status"])}
 
+    def explain_node(state):
+        first_call = llm.calls
+        guides = generate_explanations(llm, state["papers"], state["question"], state["accepted"],
+                                       max_repairs=min(max_repairs, 1), output=run_dir / "explanations", checker=check_claims)
+        return {"paper_guides": guides, "guide_api_calls": llm.calls - first_call,
+                "events": event("paper_explainer", ready=sum(g["status"] == "ready" for g in guides), papers=len(guides))}
+
     def report_node(state):
         draft = llm.structured("综合报告员", "基于已核验结论拟定中文标题、最多 3 条跨论文比较和待研究问题。"
                                "比较结论 kind=comparison，每条引用至少两篇论文的证据；单篇输入 comparisons=[]。"
@@ -248,13 +265,18 @@ def build_workflow(llm: LLM, root: Path, run_dir: Path, checkpointer=None,
     nodes = {"ingest": ingest_node, "planner": plan_node, "method_analyst": methods_node,
              "experiment_analyst": experiments_node, "single_reader": single_node,
              "verifier": verify_node, "targeted_repair": repair_node,
-             "reproducer": reproduce_node, "reporter": report_node}
+             "reproducer": reproduce_node, "reporter": report_node, "paper_explainer": explain_node}
     selected = ["ingest", "verifier", "reproducer", "reporter"]
     selected += ["single_reader"] if mode == "single" else ["planner", "method_analyst", "experiment_analyst"]
     if mode == "verified" and max_repairs:
         selected.append("targeted_repair")
+    after_verifier = "paper_explainer" if explain and mode == "verified" else "reproducer"
+    if after_verifier == "paper_explainer":
+        selected.append("paper_explainer")
     for name in selected:
         graph.add_node(name, nodes[name])
+    if after_verifier == "paper_explainer":
+        graph.add_edge("paper_explainer", "reproducer")
     graph.add_edge(START, "ingest")
     if mode == "single":
         graph.add_edge("ingest", "single_reader")
@@ -266,10 +288,10 @@ def build_workflow(llm: LLM, root: Path, run_dir: Path, checkpointer=None,
         graph.add_edge(["method_analyst", "experiment_analyst"], "verifier")
     if mode == "verified" and max_repairs:
         graph.add_conditional_edges("verifier", lambda s: "targeted_repair" if s["rejected"] and
-                                    s["review_round"] <= max_repairs else "reproducer")
+                                    s["review_round"] <= max_repairs else after_verifier)
         graph.add_edge("targeted_repair", "verifier")
     else:
-        graph.add_edge("verifier", "reproducer")
+        graph.add_edge("verifier", after_verifier)
     graph.add_edge("reproducer", "reporter")
     graph.add_edge("reporter", END)
     return graph.compile(checkpointer=checkpointer)

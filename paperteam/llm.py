@@ -185,8 +185,14 @@ class LLM:
                 if clean.startswith("```"):
                     clean = clean.split("\n", 1)[1].rsplit("```", 1)[0]
                 return schema.model_validate_json(clean)
-            except (ValueError, ValidationError):
+            except (ValueError, ValidationError) as error:
+                problems = [{"path": ".".join(map(str, e["loc"])), "type": e["type"], "message": e["msg"][:180]}
+                            for e in error.errors(include_input=False, include_url=False)[:12]] if isinstance(error, ValidationError) else [{"type": "invalid_json"}]
+                if self.run_dir:
+                    self.run_dir.mkdir(parents=True, exist_ok=True)
+                    with (self.run_dir / "structured_errors.jsonl").open("a", encoding="utf-8") as stream:
+                        stream.write(json.dumps({"agent": role, "attempt": attempt, "problems": problems}, ensure_ascii=False) + "\n")
                 if attempt:
                     raise RuntimeError(f"{role} 连续两次未返回符合约定的结构化结果。") from None
-                suffix += "\n上次输出格式错误，请严格遵循 Schema，并只返回 JSON。"
+                suffix += "\n上次输出格式错误，请修复以下字段，严格遵循 Schema，并只返回 JSON：" + json.dumps(problems, ensure_ascii=False)
         raise AssertionError("unreachable")

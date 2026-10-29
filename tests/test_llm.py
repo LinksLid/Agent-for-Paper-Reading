@@ -48,6 +48,23 @@ def test_invalid_json_gets_one_format_retry(tmp_path):
     llm.close()
 
 
+def test_schema_feedback_identifies_field_without_logging_raw_content(tmp_path):
+    from pydantic import BaseModel, Field
+    class Card(BaseModel):
+        title: str = Field(max_length=3)
+    responses = iter(['{"title": "private long title"}', '{"title": "ok"}'])
+    prompts = []
+    def handler(request):
+        prompts.append(json.loads(request.content)['messages'][-1]['content'])
+        return httpx.Response(200, json={'choices': [{'message': {'content': next(responses)}}]})
+    llm = client(tmp_path, handler)
+    assert llm.structured('test', 'hello', Card).title == 'ok'
+    assert 'title' in prompts[1] and 'string_too_long' in prompts[1]
+    diagnostic = (tmp_path / 'structured_errors.jsonl').read_text(encoding='utf-8')
+    assert 'private long title' not in diagnostic and 'test-secret' not in diagnostic
+    llm.close()
+
+
 def test_provider_error_does_not_echo_body_or_key(tmp_path):
     llm = client(tmp_path, lambda _: httpx.Response(403, text="secret test-secret confidential response"))
     with pytest.raises(RuntimeError) as failure:
