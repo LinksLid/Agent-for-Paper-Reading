@@ -1,0 +1,40 @@
+{
+  "paper_id": "81e4459231",
+  "name": "Self-Refine",
+  "status": "completed",
+  "scope": "benchmark_subset",
+  "repository": "https://github.com/madaan/self-refine",
+  "commit": "9a206d41e5d2d0c241bb441f41eeadb945afaa55",
+  "metrics": [
+    {
+      "name": "samples",
+      "artifact": "outputs/gsm_summary.json",
+      "json_path": "samples",
+      "aggregate": null,
+      "value": 2,
+      "provenance": "artifacts/outputs/gsm_summary.json"
+    },
+    {
+      "name": "accuracy_attempt_0",
+      "artifact": "outputs/gsm_summary.json",
+      "json_path": "accuracy_attempt_0",
+      "aggregate": null,
+      "value": 1.0,
+      "provenance": "artifacts/outputs/gsm_summary.json"
+    },
+    {
+      "name": "accuracy_by_attempt_4",
+      "artifact": "outputs/gsm_summary.json",
+      "json_path": "accuracy_by_attempt_4",
+      "aggregate": null,
+      "value": 1.0,
+      "provenance": "artifacts/outputs/gsm_summary.json"
+    }
+  ],
+  "sample_count": 2,
+  "sample_scores": [],
+  "search_configuration": null,
+  "run": "reproduction-resumed-20261101-151210-084474",
+  "full_paper_reproduced": false,
+  "provenance": "Summary of the team's saved 2026-11-01 run; not fresh inference on the viewer's machine."
+}

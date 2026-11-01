@@ -19,6 +19,7 @@ class Settings:
     provider: str = "compatible"
     fallback: "Settings | None" = field(default=None, repr=False)
     deepseek_budget_cny: float = 20.0
+    reasoning_effort: str = ""
 
     @classmethod
     def load(cls, root: Path = ROOT, model: str = "", provider: str = "auto"):
@@ -50,4 +51,5 @@ class Settings:
             raise ValueError("DEEPSEEK_BUDGET_CNY 必须大于零，且最大为 20。")
         return cls(root, base, key, model or values.get("MODEL") or values.get("OPENAI_MODEL") or "",
                    int(values.get("MAX_API_CALLS", 80)), float(values.get("API_TIMEOUT", 120)), provider,
-                   deepseek_budget_cny=budget)
+                   deepseek_budget_cny=budget,
+                   reasoning_effort=(values.get("REASONING_EFFORT") or "").strip())

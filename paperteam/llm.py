@@ -121,7 +121,10 @@ class LLM:
                         "temperature": 0.1, "max_tokens": max_tokens,
                     }
                     body.update({k: v for k, v in (request_options or {}).items() if k in {"stop", "temperature", "top_p"}})
-                    if "deepseek" in self.model.lower():
+                    if self.settings.reasoning_effort:
+                        body["reasoning_effort"] = self.settings.reasoning_effort
+                        record["reasoning_effort"] = self.settings.reasoning_effort
+                    elif "deepseek" in self.model.lower():
                         body["thinking"] = {"type": "disabled"}
                     usage = None
                     try:

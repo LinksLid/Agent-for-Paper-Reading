@@ -1,4 +1,4 @@
-"""Re-execute a saved Codex plan after fixing infrastructure, with source checks."""
+"""Re-execute a saved plan after fixing infrastructure, with source checks."""
 import argparse
 from datetime import datetime
 import json
@@ -17,7 +17,9 @@ from .repository_experiments import (ExperimentPlan, build_repository_workflow, 
 
 
 def resume(previous: Path, settings: Settings, samples=6, progress=print, pins=None, initial_plan=False,
-           completion_continuation=False, match_episodes: Path | None = None):
+           completion_continuation=False, match_episodes: Path | None = None, backend="api"):
+    if backend not in {"api", "codex"}:
+        raise ValueError("实验规划后端必须是 api 或 codex")
     previous = previous.resolve()
     root = settings.root
     if not previous.is_relative_to((root / "output").resolve()):
@@ -93,7 +95,7 @@ def resume(previous: Path, settings: Settings, samples=6, progress=print, pins=N
                                            "reason": "Source and dataset integrity checked; infrastructure fixed; no new initial planning call"})
     save_json(output / "datasets.json", [{k: v for k, v in r.items() if k != "host_path"} for r in resources])
     llm, github = LLM(settings, output), GitHub(root)
-    planner = CodexPlanner(output / "codex")
+    planner = CodexPlanner(output / "codex") if backend == "codex" else llm
     started = time.monotonic()
     try:
         graph = build_repository_workflow(llm, github, folder, samples,
@@ -109,7 +111,8 @@ def resume(previous: Path, settings: Settings, samples=6, progress=print, pins=N
                   "commands": state.get("commands", []), "artifacts": state.get("artifacts", []),
                   "artifact_root": state.get("artifact_root"), "repair_attempts": state.get("attempts", 0),
                   "metrics": state.get("metrics", []), "assessment": state.get("assessment"),
-                  "events": state["events"], "planning_backend": "codex", "codex_calls": planner.calls,
+                  "events": state["events"], "planning_backend": backend,
+                  "codex_calls": planner.calls if backend == "codex" else 0,
                   "plan_reused_from": str(selected), "datasets": dataset_context(resources), "full_paper_reproduced": False,
                   "completion_continuation": completion_continuation, "matched_episodes": episode_names,
                   "experiment_models": list({(r["provider"], r["model"]): {"provider": r["provider"], "model": r["model"]}
@@ -131,6 +134,7 @@ if __name__ == "__main__":
     parser.add_argument("previous", type=Path)
     parser.add_argument("--samples", type=int, choices=range(1, 101), default=6)
     parser.add_argument("--max-calls", type=int, default=400)
+    parser.add_argument("--backend", choices=["api", "codex"], default="api")
     parser.add_argument("--pin", action="append", default=[])
     parser.add_argument("--initial-plan", action="store_true")
     parser.add_argument("--completion-continuation", action="store_true")
@@ -138,5 +142,6 @@ if __name__ == "__main__":
     arguments = parser.parse_args()
     result, path = resume(arguments.previous, replace(Settings.load(), max_calls=arguments.max_calls), arguments.samples,
                           progress=lambda message: print(message, flush=True), pins=arguments.pin, initial_plan=arguments.initial_plan,
-                          completion_continuation=arguments.completion_continuation, match_episodes=arguments.match_episodes)
+                          completion_continuation=arguments.completion_continuation, match_episodes=arguments.match_episodes,
+                          backend=arguments.backend)
     print(json.dumps({"status": result["status"], "output": str(path), "completed": result["completed"]}, ensure_ascii=False))

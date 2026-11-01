@@ -8,10 +8,6 @@ if (-not (Test-Path -LiteralPath '.venv\Scripts\python.exe')) {
     python -m venv .venv
     if ($LASTEXITCODE -ne 0) { throw 'Failed to create virtual environment.' }
 }
-if (Test-Path -LiteralPath 'requirements-lock.txt') {
-    & '.\.venv\Scripts\python.exe' -m pip install -r requirements-lock.txt
-} else {
-    & '.\.venv\Scripts\python.exe' -m pip install -r requirements.txt
-}
+& '.\.venv\Scripts\python.exe' -m pip install -r requirements.txt
 if ($LASTEXITCODE -ne 0) { throw 'Failed to install dependencies.' }
 Write-Output 'Setup complete. Run scripts\start.ps1 to open PaperTeam.'

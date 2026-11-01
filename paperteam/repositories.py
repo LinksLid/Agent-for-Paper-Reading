@@ -245,8 +245,17 @@ def inspect_repository(repo: Path):
             return 95
         if path in {"core/api_config.py", "core/llm.py", "core/chat_manager.py", "core/agents.py"}:
             return 94
+        if path in {"math/gen_math.py", "src/tot/models.py", "src/tot/methods/bfs.py", "src/tot/tasks/game24.py",
+                    "src/commongen/run.py", "src/commongen/task_init.py", "src/commongen/task_iterate.py",
+                    "src/commongen/feedback.py", "src/utils.py", "scripts/game24/bfs.sh",
+                    "src/gsm/run.py", "src/gsm/task_init.py", "src/gsm/feedback.py", "src/gsm/gsm_selfref_eval.py"}:
+            return 94
         if "/" not in path and name.endswith((".ipynb", ".py", ".sh", ".bat")):
             return 90
+        if name.startswith(("gen_", "generate_", "solve_")) and path.endswith(".py"):
+            return 85
+        if name in {"run.py", "main.py"} or path.endswith(".sh"):
+            return 82
         if path.endswith((".py", ".sh")) and any(t in path.lower() for t in ("run_", "eval", "main", "infer")):
             return 80
         if name.startswith("readme"):

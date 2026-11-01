@@ -1,168 +1,161 @@
-# PaperTeam：多智能体论文阅读与原仓库实验
+# PaperTeam · 可视化多智能体论文阅读工作台
 
-基于 **LangGraph** 的六角色工作流：阅读规划、方法分析、实验分析、证据核验、实验复现、报告综合。阅读结论附 PDF 页码和原文证据；复现从每篇论文出发，**搜索并核对 GitHub，下载源码，依据原仓库配置、运行和评估实验**。
+**上传论文 PDF → 输入阅读问题 → 实时查看智能体协作 → 获得有原文证据的中文报告。**
 
-## 快速开始
+基于 LangGraph 的完整本地应用。新首页可以真正调用模型阅读论文；项目总览、证据工作台、实验记录和课程汇报作为辅助页面保留。
 
-需要 Python 3.12；执行第三方仓库还需要已启动的 Linux Docker 引擎。
+![PaperTeam 论文阅读工作台](docs/assets/reader-home.png)
 
-```powershell
-git clone https://github.com/LinksLid/Agent-for-Paper-Reading.git
-cd Agent-for-Paper-Reading
-powershell -ExecutionPolicy Bypass -File scripts/setup.ps1
-powershell -ExecutionPolicy Bypass -File scripts/start.ps1
+## 下载后运行
+
+需要 **Python 3.11+**，推荐 3.12；首次安装依赖需要网络。无需 Node.js、GPU 或 Docker，即可阅读文本型论文。
+
+1. GitHub 点击 **Code → Download ZIP**，解压。
+2. Windows 双击 **`start.bat`**；macOS/Linux 运行 **`sh start.sh`**。
+3. 首次启动自动创建 `.venv`、安装 `requirements.txt`，随后自动打开 **http://127.0.0.1:8600/#read**。
+4. 首页右侧“模型连接 → 配置”：填写自己的 Base URL、模型名称和 API Key，保存到本机 `.env`。已有 `.env` 自动读取。
+5. 上传 1—3 篇 PDF，填写阅读问题，点击 **开始阅读**。
+6. 观察真实的节点执行状态；完成后查看 **阅读报告 / 原文证据 / 执行日志**，下载 Markdown 报告，或打印保存 PDF。
+
+每篇 PDF 最大 20 MB、150 页，支持可提取文字的 PDF；扫描版需要先 OCR。一次仅运行一个任务。论文文字会发送到你配置的模型服务并消耗额度；密钥不会返回浏览器或包含在发布包里。
+
+运行后保持终端窗口开启，Ctrl+C 停止网站。也可执行：
+
+```bash
+python launch.py
+python launch.py --port 8602           # 更换端口
+python launch.py --no-browser          # 不自动打开浏览器
 ```
 
-将 PDF 放入 `paper/`，按 `.env.example` 在根目录配置备用接口：
+PyCharm：打开整个仓库，选择 Python 3.11+ 解释器，运行 **`launch.py`**。启动器自动准备虚拟环境；后台阅读任务使用该环境。
+
+**没有 API Key 也能打开网站和历史案例，但不能生成新的阅读报告。** 双击 `index.html` 或 GitHub Pages 仅提供静态演示；真正上传和执行需要运行本地 Python 服务。
+
+## 首页能做什么
+
+| 功能 | 实际行为 |
+|---|---|
+| 上传论文 | 拖放或选择 PDF，保存到本机 `.cache/web-jobs/uploads/` |
+| 提出问题 | 全面精读、重点看方法、重点看实验，或自定义要求 |
+| 选择模式 | 默认多智能体+语义核验；提供单智能体和不做语义核验的对照模式 |
+| 实时进度 | 解析、规划、方法/实验分析、核验、定向修订、讲解、报告；来自真实开始/结束事件 |
+| 查看报告 | 方法、改进、实验、局限、引文；点击证据页码打开上传的原 PDF |
+| 下载与打印 | Markdown 下载；浏览器打印可保存 PDF |
+| 运行管理 | 调用上限、已返回 token 数、停止任务、最近阅读与刷新后恢复 |
+| 模型连接 | OpenAI 兼容 Chat Completions 接口；本机保存自己的配置 |
+
+进度只显示已发生的事件和已返回的用量，不虚构完成百分比。停止任务会保留已产生的日志，正在进行的远端请求可能仍已计费。
+
+## 其他展示页面
+
+项目总览展示已保存的研究记录；协作流程回放历史节点；证据工作台支持筛选；实验页显示小样本结果和限制；论文库比较机制；课程汇报提供对应六项课程要求的汇报页。右上角“课堂汇报”用左右键翻页、Esc 退出；姓名仅存在当前浏览器。
+
+随包案例是 **2026-11-01 的公开历史节选**，不是下载者刚跑出的成绩。88 条是系统接受数量，不是人工准确率。浏览历史案例不会调用模型。
+
+## 模型与高级入口
+
+网页“模型连接”可保存配置，也可以复制 `.env.example` 为 `.env`：
 
 ```dotenv
 Base_url=https://your-provider.example/v1
-API_KEY=your-key
-MODEL=
+API_KEY=replace-with-your-own-key
+MODEL=your-model-id
 MAX_API_CALLS=80
-API_TIMEOUT=120
+API_TIMEOUT=180
+REASONING_EFFORT=
 ```
 
-同时兼容 `OPENAI_BASE_URL`、`OPENAI_API_KEY` 和 `OPENAI_MODEL`。论文片段和公开仓库材料会发送到该 API，请使用获准处理这些材料的服务。可按 `deepseek.env.example` 配置 `deepseek.env`，优先使用 DeepSeek，预算不足自动切到 `.env` 的同济接口。真实配置不提交 GitHub。
+兼容同济示例：Base URL 为 `https://agi.tongji.edu.cn/v1`，模型名称按自己套餐可用项填写。其他用户需要自己的 Key，不会共享本团队额度。
 
-## 使用
+可选的原 Streamlit 实验工作台：`python launch.py --workbench`，地址 http://127.0.0.1:8501。新网站首页直接执行阅读，无须跳转。
 
-阅读结果默认进入 **先读懂论文**，逐篇按以下顺序讲解：
+只看历史演示且不安装依赖：`python launch.py --presentation-only`。更新静态数据用 `python -m paperteam.showcase --export-only --data-mode demo`。
 
-1. **任务与输入输出**：谁拿到什么材料、需要交付什么结果；原来怎么做、卡在哪里。
-2. **一个小例子**：用明确标注的假想输入走一遍方法，帮助理解；教学推演没有实际运行。
-3. **方法流程**：展示经核验的数据流图，每步说明接收什么、执行什么、交付什么；区分训练、推理和评测。
-4. **具体改进对照**：逐项列出原有做法、本文做法、改动原因及对应实验依据。系统总分不自动等于每个组件的独立贡献。
-5. **验证与边界**：作者报告和本机实验分别展示，附通俗术语解释；可选择原文依据、PDF物理页码及页图。
+高级命令（使用已安装依赖的解释器）：
 
-这层讲解由综合报告员整理，调用证据核验员逐项复核，缺口触发最多一次补查。字段、图中节点和连线都需要原文支持；未通过核验的事实不进入主讲解。教学示例另做方法一致性检查。这里的“8项齐备”只表示讲解结构满足检查条件，不表示覆盖论文全部内容或人工确认正确。
-
-已保存的历史阅读可以点击 **生成全部论文的讲解** 单独升级；已有讲解时，选择论文后点击 **更新这篇论文的讲解**，只更新所选论文并保留其他讲解与原实验记录。生成前核对PDF哈希；原文页图使用可选的 Poppler `pdftoppm`，未安装时仍可查看引用与下载原PDF。导出的 Markdown 包含 Mermaid 方法图和引用。五篇论文的完整阅读加讲解建议将本次 API 调用上限设为120；实际调用量受补查次数影响，累计20元预算仍生效。
-
-界面默认启用「查找 GitHub 并尝试论文实验」。旧阅读结果可在 **论文实验复现** 页签单独启动，无需重做阅读分析。逐篇展示仓库、提交、计划、命令、产物、实测指标或具体缺口。
-
-```powershell
-# 仅本地解析 PDF，不调用 API
-.venv/Scripts/python.exe -m paperteam index
-# 模型列表；--provider tongji 可显式使用备用接口
-.venv/Scripts/python.exe -m paperteam models
-# 阅读和原仓库实验
-.venv/Scripts/python.exe -m paperteam read --paper MAC-SQL --paper CHESS --reproduce --samples 2
-# 单独执行实验流程，不重复阅读
-.venv/Scripts/python.exe -m paperteam reproduce --paper ReAct --samples 2
-# 处理 paper 中的每篇论文
-.venv/Scripts/python.exe -m paperteam reproduce --samples 2
+```bash
+python -m paperteam index
+python -m paperteam read --paper MAC-SQL --mode verified --max-repairs 1 --provider tongji
+python -m paperteam reproduce --paper ReAct --samples 2 --provider tongji
+python scripts/download_paper_catalog.py
 ```
 
-`--samples` 是目标样本数，仅在原实验入口可控制样本量时生效。不会生成玩具数据凑样本。
+`tongji` 是配置选择器，读取用户自己的 `.env`。高级多服务策略见[技术参考](docs/technical-reference.md)。
 
-## 可选：让复现 Agent 调用 Codex
+## 框架如何协作
 
-在界面「复现实验规划与修复」选择 **Codex CLI**，或使用：
-
-```powershell
-# 首次在本机安装官方 Codex CLI 并登录；已有登录可直接复用
-codex login
-codex login status
-.venv/Scripts/python.exe -m paperteam reproduce --paper ReAct --samples 2 --reproduction-backend codex
-# 阅读工作流中也可启用
-.venv/Scripts/python.exe -m paperteam read --paper ReAct --reproduce --reproduction-backend codex
+```mermaid
+flowchart LR
+    A[PDF解析与索引] --> B[阅读规划]
+    B --> C[方法分析]
+    B --> D[实验分析]
+    C --> E[证据核验]
+    D --> E
+    E -->|退回且未超上限| F[定向补查]
+    F --> E
+    E --> G[逐篇讲解与检查]
+    G --> H[可选原仓库实验]
+    H --> I[综合报告]
 ```
 
-LangGraph 仍负责角色、状态、分支和返工；Codex 是复现 Agent 的代码工具，接管「制定实验计划」与「按真实错误修复计划」两个节点。搜索核对、论文阅读、结果解释和原实验中的模型请求仍使用现有 API。实验命令与兼容补丁先通过原文依据和路径校验，再交给 Docker 执行；Codex 无法直接在宿主机运行论文代码。
+六个主要角色：规划员、方法分析员、实验分析员、证据核验员、实验复现员、报告员。LangGraph负责共享状态、汇合与条件返工，SQLite提供检查点；逐篇讲解是报告员的子流程。
 
-通过官方 `codex exec` 的非交互模式、JSON Schema 输出和只读沙箱接入。仅向它提供已检查的仓库片段与必要日志，不传入 `.env` 内容；禁用此次调用的命令工具、插件、子任务、搜索和用户配置加载。认证复用 CLI 自己的缓存登录，模型使用忽略用户配置后的 CLI 默认值。当前支持原生 CLI，包括官方 npm 的 Windows 安装布局。需要支持 `--ignore-user-config`、`--ephemeral`、`--output-schema` 的 CLI 版本；本机检测到的原生 CLI 为 0.164.0-alpha.11.1，npm CLI 为 0.147.0，运行时优先原生程序。
+实验子图依次搜索/核对官方仓库、下载固定提交、检查前提、验证计划、容器执行、按实际错误修复一次、读取实际产物。图中并行分支不代表API请求实际并发，同一模型的多个角色仍可能共享偏差。
 
-**Codex 用量不属于 DeepSeek 20元预算。** ChatGPT 登录使用对应 Codex 账户额度；API 凭据登录按该账户规则计费。每次流程最多 10 次 Codex 调用，每次超时 300 秒，初始计划与最多一次修复分别计数；`--max-calls` 仍仅约束现有 API。Codex 不可用、超时或结构校验失败时记录失败，不静默切换后端。用量元数据保存在实验输出的 `codex/codex_usage.jsonl`，结果中分别记录 `planning_backend`、`codex_calls` 和原实验实际使用的模型。
+真正执行第三方仓库还需要 **已启动的Linux Docker引擎**、真实数据及必要模型资源。缺前提时保留原因，不直接在宿主机执行下载代码，也不删除原方法模块来制造复现成功。
 
-接入 Codex 可以辅助代码分析和依赖兼容，不能补足未提供的数据、权重、GPU，也不代表获得论文原模型或完整复现指标。默认仍使用现有 API；新增开关不会自动启动实验。接入测试使用模拟 CLI 和容器，不把测试夹具结果当真实实验。
+## 随仓库提供的历史结果
 
-接口依据：[OpenAI Docs：非交互运行](https://learn.chatgpt.com/docs/non-interactive-mode)、[认证与账户用量](https://learn.chatgpt.com/docs/auth)。
-
-## 工作流
-
-阅读：PDF 按页索引 → 规划 → 方法/实验并行分析 → 原文定位与语义核验 → 定向补查 → 任务/方法/改进讲解与核验 → 逐篇实验 → 报告与比较结论核验。
-
-新增讲解是综合报告员的子流程，仍为六个角色。默认 `verified` 配置启用；单智能体与仅分工基线保留各自流程，避免将额外核验调用混进基线。对历史结果单独升级时，新增API调用与耗时单独记录，不能混作原基线耗时。
-
-实验是独立 LangGraph 子图：**搜索 → README 对应关系核验 → 下载固定提交 → 检查仓库 → 制定原实验计划 → 容器执行 → 核对产物**。命令失败后，根据真实日志修复最多一次，再尝试执行。
-
-既检查论文内的链接，也按准确标题、方法名和作者搜索；README 必须提供对应关系的原文，排除被引用的依赖库和无关同名项目。搜索失败不会被解释为论文没有代码。搜索和源码缓存复用一天，复用源码时核对文件哈希。GitHub 公共 REST 额度不足时，可用只读 Git ref 查询获取公开仓库提交。
-
-## 如何运行原实验
-
-使用原仓库脚本或 Notebook、真实数据与评估逻辑。允许记录清楚的依赖版本、API、路径、样本上限和结果导出兼容补丁；不改算法、数据标签、金标准或评分函数来制造成功。Notebook 直接执行修改后的代码单元，保留输出。
-
-Docker 使用只读根目录、2 CPU、4GB 内存、进程数限制和最小权限。只挂载对应源码（只读）和本次输出目录；主项目、PDF、两份真实配置和 Docker socket 均不挂载。容器结束后删除，源码和日志保留。Docker 不可用时保留计划和原因，不回退到无操作系统隔离的本机执行。
-
-原代码只获得临时 API 代理 token，真实密钥保留在主进程；代理继续执行累计20元预算和调用次数限制。支持非流式文本 chat/completions、旧 completions 与 Azure 风格 chat 路径；暂不支持 embedding、视觉、工具调用和流式。容器未配置 GPU，不自动下载大型模型权重。缺数据、权重或其他服务时，逐项列出名称和路径。
-
-### 官方数据与失败重跑
-
-```powershell
-# BIRD 首次下载约346MB；仅解压固定前N条所需数据库，并记录源包及文件哈希
-.venv/Scripts/python.exe -m paperteam fetch-data --dataset bird --samples 6
-# 更大的正式数据子集可直接通过CLI或界面设置目标样本数（1—100）
-.venv/Scripts/python.exe -m paperteam fetch-data --dataset bird --samples 30
-.venv/Scripts/python.exe -m paperteam reproduce --paper MAC-SQL --samples 30 --max-calls 200 --reproduction-backend codex
-# 首次下载约143MB的 ALFWorld 官方文本数据，仅提取 valid_unseen；不下载视觉模型
-.venv/Scripts/python.exe -m paperteam fetch-data --dataset alfworld
-# 对 output 中的已完成/失败实验目录复用原计划；先核对每个源码文件和数据哈希
-.venv/Scripts/python.exe -m paperteam.resume_experiment output/your-run/paper-id --samples 6
-```
-
-数据保存在 `external/datasets/`，作为独立只读挂载提供给容器，不复制到下载的源码里，也不传入真实配置。`/work/datasets` 是容器内指向 `/datasets` 的兼容别名，解决部分原仓库去掉绝对路径开头斜线的问题。第三方代码仍不能访问主项目和真实密钥。失败时也尝试保留已有产物，修复模型同时获得生成和评测日志，避免只看到“预测为空”的后续错误。
-
-ALFWorld 的 Jericho/TextWorld 依赖编译工具；框架会用 `docker/python-tools.Dockerfile` 构建独立运行镜像。构建上下文只有 docker 目录，运行阶段仍使用只读根目录、4GB内存和2CPU限制。HotpotQA/FEVER 的 Wikipedia 入口若返回403，记录依赖不可用，不将错误页当检索内容计算有效性能。
-
-`resume_experiment --pin alfworld==0.4.2` 只修正原计划已包含的依赖版本，并保存修改来源。`--completion-continuation` 显式为旧 Completion 请求增加“按输入继续补全”的 system 格式约束；原始聊天请求不变。该设置会改变模型输入，必须作为兼容性对照单独记录，不能称作原论文完全相同的提示设置。可配合 `--match-episodes <baseline/artifacts/alfworld_results.json>` 复用基线实际执行的相同任务标识；不提供专家动作或答案。
-
-MAC-SQL 的执行准确率直接从原 `eval_result_dev.json` 的全部 `res` 字段聚合；包含失败样本，不丢弃0分，不用模型估分。30条实验只覆盖官方开发集顺序中的首个数据库，不能外推全量1534条或跨库泛化效果。完整指标和失败记录见 [验证记录](docs/validation.md)。
-
-| 状态 | 含义 |
+| 案例 | 保存的小样本结果 |
 |---|---|
-| completed | 原实验运行并产生实际产物；基准与评估任务还需有可解析指标 |
-| executed | 已运行，但产物或指标不足以确认完成 |
-| smoke_passed | 仅环境、帮助命令或单元测试通过 |
-| blocked | 缺少明确的运行前提 |
-| failed | 某阶段实际失败，保留日志与原因 |
-| not_found | 本轮未核实到对应仓库，不代表全球没有实现 |
+| MAC-SQL | BIRD前6题，执行评估5/6 |
+| ReAct | ALFWorld两个文本任务，成功1/2 |
+| Multiagent Debate | 原解析器末轮3/10；同一输出的额外格式审计10/10，两种口径不能混用 |
+| Self-Refine | 首轮2/2；反馈后程序未变，未观察到提升 |
+| Tree of Thoughts | 低预算greedy1搜索0/2，单次CoT原评分0/2；存在格式兼容问题 |
+| CHESS / KnowTrans / LLaVA | 受embedding、权重、图像或计算资源限制，不计作0分 |
 
-源码已下载与实验已完成分别显示。不同模型、小规模子集或兼容补丁产生的结果不自动宣称复现论文完整指标。旧版 MAC-SQL 合成数据库验证代码和示例仅作历史记录，**已不是当前论文复现流程**。
+这些运行替换模型、缩小样本或调整参数，**所有 `full_paper_reproduced=false`**。依据见[公开演示数据](examples/public-demo.json)、[评分摘要](showcase/data/artifacts)和[演示数据说明](docs/demo-data.md)。完整PDF、第三方源码、大型数据与权重不随仓库分发。
 
-## 结果文件
+## Docker和在线演示
 
-阅读结果在 `output/<run-id>/`：`report.md`、`state.json`、`manifest.json`、SQLite 检查点、API 用量与实际编排图。实验按论文 ID 单独保存：
+运行完整阅读网站（首次构建安装依赖）：
 
-逐篇讲解及每轮核验保存在 `explanations/<paper-id>/`，历史升级使用 `explanations-<时间>/`；`state.json.paper_guides` 保存可展示内容、逐项核验结果、讲解结构缺口与补查历史。结构化输出的字段错误只记录路径和错误类型，不保存完整原始响应；机械断词恢复另记原生成引文与连续原文，之后仍做语义核验。
-
-| 文件 | 内容 |
-|---|---|
-| discovery.json | 搜索、候选、README 对应依据 |
-| source.json | 仓库、提交、压缩包与文件哈希 |
-| inspection.json | 实验入口、依赖、数据等检查 |
-| plan.json / repaired_plan.json | 初始计划与日志驱动的修复计划 |
-| progress.json / result.json | 当前阶段与最终结果 |
-| commands.json / execution_history.json | 真实命令、退出码、输出和耗时 |
-| patches/ | 兼容性修改后的副本，原下载源码不变 |
-| artifacts/ | 原实验产生的结果与已执行 Notebook |
-
-指标只从实际 JSON 产物解析数值，不接受 LLM 估算。密钥、论文、源码下载、依赖环境和运行缓存均不提交。
-
-## DeepSeek 20元预算
-
-存在 `deepseek.env` 时优先用 deepseek-flash。每次付费调用前查人民币余额，按输入字节上界、输出 token 上限和高峰费率保守预留；余额不足、HTTP 402 或预算不足时，同一工作流改用 `.env`。账本为 `.cache/deepseek-budget.sqlite`，跨重启和进程共享，不要删除来重置预算。
-
-上限20元，可用 `DEEPSEEK_BUDGET_CNY` 调低；保守记账可能提前切换，账单以服务商为准。无法确认人民币余额也切到备用接口。费率快照日期2026-10-26，参考 [官方价格](https://api-docs.deepseek.com/zh-cn/quick_start/pricing/)，价格变化需维护 budget.py。切换记录实际模型，不能当成同模型控制实验。
-
-## 汇报与测试
-
-[六人分工](docs/team-project.md)、[评测方案](docs/evaluation.md)、[实际验证记录](docs/validation.md)。阅读配置支持 single、multi、verified；正式比较应人工标注正确率、证据支持率、覆盖率并报告 token 和时间，当前配置不是严格等预算消融。
-
-```powershell
-.venv/Scripts/python.exe -m pytest -q
+```bash
+docker compose up --build -d
+# 打开 http://127.0.0.1:8600
+# 停止：docker compose down
 ```
 
-自动测试不调用实际付费 API，也不执行第三方仓库。真实运行单独记录。PDF 当前只支持文本抽取；双栏、表格、图像和公式仍需人工核对，同一模型的多个角色可能共享偏差。
+镜像包含真实阅读依赖。可在网页配置模型，或准备本机 `.env` 由 Compose 注入；上传文件和输出通过卷保留。修改 `.env` 后重建容器使环境变量生效。该入口不提供 Docker 内再嵌套运行第三方仓库实验。
 
-官方参考：[LangGraph](https://docs.langchain.com/oss/python/langgraph/graph-api)、[ReAct](https://github.com/ysymyth/ReAct)、[MAC-SQL](https://github.com/wbbeyourself/MAC-SQL)、[CHESS](https://github.com/ShayanTalaei/CHESS)、[KnowTrans](https://github.com/A11en0/KnowTrans)、[LLaVA](https://github.com/haotian-liu/LLaVA)。第三方源码不作为本项目原创代码分发，使用时遵守上游条款。
+仓库附带手动触发的[GitHub Pages工作流](.github/workflows/pages.yml)。配置Pages的GitHub Actions来源后，运行工作流可发布静态演示；Pages不运行Python、模型或容器，也不保存密钥。操作见[GitHub发布指南](docs/github-release.md)，配置依据[GitHub官方文档](https://docs.github.com/en/pages/getting-started-with-github-pages/using-custom-workflows-with-github-pages)。
+
+## 目录与开发
+
+```text
+launch.py / start.bat / start.sh   统一启动入口
+showcase/                        HTML/CSS/JS、公开快照和评分摘要
+examples/public-demo.json         历史记录的可分发节选
+paperteam/                       LangGraph、模型接口、核验和容器执行
+paperteam/web_jobs.py             上传、后台任务、真实进度与报告接口
+app.py                           可选 Streamlit 实验工作台
+paper/                           用户PDF，不提交全文
+config/paper-catalog.json          官方论文目录
+docker/                          实验工具镜像
+tests/                           不调用真实付费API的软件测试
+docs/                            使用、架构、评测和发布文档
+output/ external/ .cache/         本机运行、下载和缓存，不提交
+```
+
+```bash
+python -m pip install -r requirements.txt
+python -m pytest -q
+python -m paperteam.showcase --export-only --data-mode demo
+```
+
+CI包含软件测试及不安装模型依赖的首次启动检查。[本次发布验证](docs/release-validation.md)记录真实网页阅读和软件、独立目录等检查。使用顺序、故障处理和课堂演示见[使用手册](docs/user-guide.md)。评测参考[人工评测清单](docs/人工评测与课堂演示清单.md)。
+
+## 来源与许可
+
+基于 [LinksLid/Agent-for-Paper-Reading](https://github.com/LinksLid/Agent-for-Paper-Reading) 的指定提交扩展，保留原作者署名。检查的上游版本未附许可证，本整理不擅自将全部代码重标为MIT等许可；详见[NOTICE](NOTICE.md)。团队应如实列出本组改造和成员贡献。

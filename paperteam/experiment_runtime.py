@@ -218,15 +218,22 @@ class DockerRuntime:
             argv = ["/tmp/venv/bin/python", "-m", "pip", *argv[1:]]
         elif argv[0] == "pytest":
             argv = ["/tmp/venv/bin/python", "-m", "pytest", *argv[1:]]
+        deadline = max(1, min(int(timeout), 1800))
+        # Stop the command first, leaving the container alive for artifact checks.
+        # /work is tmpfs; killing the container before collect() loses its files.
         host = ["docker", "exec", "--workdir", "/work" + ("/" + cwd if cwd != "." else ""),
-                "--env", "PATH=/tmp/venv/bin:/usr/local/bin:/usr/bin:/bin", self.name, *argv]
-        result = self._host(host, timeout=min(timeout, 600))
+                "--env", "PATH=/tmp/venv/bin:/usr/local/bin:/usr/bin:/bin", self.name,
+                "timeout", "--kill-after=5s", str(deadline)+"s", *argv]
+        result = self._host(host, timeout=deadline + 10)
+        hard_timeout = result.get("timed_out", False)
+        if result["exit_code"] == 124:
+            result["timed_out"] = True
         record = {"phase": label, "argv": argv, "cwd": cwd, **result}
         if self.broker:
             record = json.loads(json.dumps(record).replace(self.broker.token, "<temporary-token>"))
         self.records.append(record)
         (self.output / "commands.json").write_text(json.dumps(self.records, ensure_ascii=False, indent=2), encoding="utf-8")
-        if result.get("timed_out"):
+        if hard_timeout:
             self._host(["docker", "kill", self.name])
         return record
 

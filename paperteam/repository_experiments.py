@@ -37,7 +37,7 @@ def check_external_services(repo: Path):
 class ExperimentCommand(BaseModel):
     argv: list[str] = Field(min_length=2, max_length=80)
     cwd: str = "."
-    timeout_seconds: int = Field(default=300, ge=10, le=600)
+    timeout_seconds: int = Field(default=300, ge=10, le=1800)
     source_file: str
     source_quote: str
     purpose: str
@@ -205,7 +205,11 @@ def build_repository_workflow(llm, github: GitHub, output: Path, samples=3, prog
         prompt = ("根据实际下载的论文仓库制定可执行实验计划。必须使用原仓库的实验入口、真实数据和评估代码，禁止另造玩具数据、"
                   "预填模型答案或把导入成功当作实验复现。当前最多计划 " + str(samples) + " 个真实样本。"
                   "环境：Docker CPU 容器，Python 3.10/3.11/3.12 可选，4GB 内存，暂无容器 GPU，"
-                  "不自动下载大型模型、没有真实密钥。inventory.datasets 列出实际只读挂载的已核验公开数据及其容器路径；"
+                  "不自动下载大型模型。第三方容器没有真实密钥，但 uses_llm=true 时框架会自动提供可用的临时API代理和临时token；"
+                  "当前宿主模型接口已在本流程中用于搜索与规划，不能把容器没有真实密钥、external_services为空当作LLM不可用。"
+                  "作者原实验入口自带的固定种子任务生成器是合法原实验数据来源，例如 math/gen_math.py 的算术问题；"
+                  "保留原分布与种子，不需要额外下载GSM/MMLU才能运行这个独立任务，也不等于本项目另造玩具数据。"
+                  "inventory.datasets 列出实际只读挂载的已核验公开数据及其容器路径；"
                   "其中 bird-dev 的 dev.json 是固定前N条真实开发集，dev_gold.sql 是对应官方金标准，dev_tables.json 为原始模式。"
                   "数据可直接作为原脚本参数使用，禁止向生成模型提供金标准 SQL。若 datasets 为空才表示无外部数据。"
                   "external_services 列出外部服务实际探测结果，服务不可用时不能伪装成已完成的性能评测。"
@@ -219,6 +223,7 @@ def build_repository_workflow(llm, github: GitHub, output: Path, samples=3, prog
                   "数据在仓库中可用时优先做小规模原实验；API 需要时 uses_llm=true，框架提供兼容 OpenAI 的临时代理，"
                   "通过 OPENAI_BASE_URL/OPENAI_API_BASE/OPENAI_API_KEY 环境变量使用，不得硬编码外部服务密钥。"
                   "代理支持非流式 chat/completions 和旧 completions，不支持工具调用、embedding 或视觉。"
+                  "代理每次只支持n=1；原脚本n>1的批量采样可等价拆为多次单响应请求，保留原采样总数。"
                   "所有 install/run 命令给 argv 数组，source_file 与 source_quote 必须逐字对应提供的仓库内容。"
                   "允许 patches 对原脚本做 API/路径/样本上限兼容修改，但不能改变算法、数据标签、评估或伪造指标；"
                   "old 必须唯一匹配原文件，新输出文件名用相对路径。不可凭空引入作者未提供的训练模型或数据。"
@@ -226,6 +231,8 @@ def build_repository_workflow(llm, github: GitHub, output: Path, samples=3, prog
                   "对 Notebook 安装 nbconvert 和 ipykernel 即可，无需完整 jupyter 元包，可用 python -m jupyter nbconvert --execute 执行；"
                   "原代码含 openai.Completion.create 或 openai.ChatCompletion.create 时，安装 openai<1 或0.28版本；gym配合numpy<2。"
                   "将原循环的500样本改为目标数量，允许在原脚本末尾导出实际计算的分数/预测到JSON。"
+                  "保留逐样本预测；若原多轮算法已有初始与最终答案，可一并导出用于前后核对，不另加金标准反馈。"
+                  "原脚本按旧模型价格硬编码的cost不代表本次费用，应保留token记录并明确不采用该金额估算。"
                   "能够由 install、临时API代理或兼容补丁自动解决的事项，不应列入 missing_requirements。"
                   "scope 如只有帮助命令或单元测试必须为 smoke_test，不能标成 benchmark_subset。"
                   "metrics 只能指定实际产出 JSON 中的数值键，json_path 以点分隔；不能给模型估计分数。"
@@ -250,14 +257,18 @@ def build_repository_workflow(llm, github: GitHub, output: Path, samples=3, prog
             return {"status": "blocked", "reason": "Wikipedia 外部依赖不可用，未将错误页产生的分数计为有效论文实验。"}
         if not docker_available():
             return {"status": "blocked", "reason": "需要 Linux Docker 引擎执行原仓库；当前 Docker 未就绪。源码和实验计划已保存。"}
-        calls_per_sample = 55 if any(arg.lower().endswith("alfworld.ipynb") for step in plan.run for arg in step.argv) else 14
+        if "src/tot/methods/bfs.py" in state["inventory"]["files"]:
+            calls_per_sample = 250
+        else:
+            calls_per_sample = 55 if any(arg.lower().endswith("alfworld.ipynb") for step in plan.run for arg in step.argv) else 14
         broker_context = Broker(llm, max_calls=max(8, samples * calls_per_sample),
                                 completion_continuation=plan.completion_continuation) if plan.uses_llm else nullcontext(None)
         commands, artifacts = list(state.get("commands", [])), []
         attempt_output = output if not state.get("attempts") else output / ("retry-" + str(state["attempts"]))
         with broker_context as broker:
             runtime_options = {"datasets": datasets} if datasets else {}
-            if any("alfworld" in arg.lower() or "textworld" in arg.lower() for command in plan.install for arg in command.argv):
+            if any("alfworld" in arg.lower() or "textworld" in arg.lower() or arg.startswith("git+")
+                   for command in plan.install for arg in command.argv):
                 runtime_options["build_tools"] = True
             with DockerRuntime(Path(state["repo_path"]), attempt_output, plan.python_version, broker, **runtime_options) as runtime:
                 for patch in plan.patches:

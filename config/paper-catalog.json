@@ -1,0 +1,69 @@
+[
+  {
+    "id": "macsql",
+    "title": "MAC-SQL: A Multi-Agent Collaborative Framework for Text-to-SQL",
+    "pdf": "https://arxiv.org/pdf/2312.11242",
+    "repository": "https://github.com/wbbeyourself/MAC-SQL",
+    "group": "original",
+    "scope": "BIRD official subset; requires Docker and model API"
+  },
+  {
+    "id": "chess",
+    "title": "CHESS: Contextual Harnessing for Efficient SQL Synthesis",
+    "pdf": "https://arxiv.org/pdf/2405.16755",
+    "repository": "https://github.com/ShayanTalaei/CHESS",
+    "group": "original",
+    "scope": "BIRD, embedding service and retrieval indexes required"
+  },
+  {
+    "id": "react",
+    "title": "ReAct: Synergizing Reasoning and Acting in Language Models",
+    "pdf": "https://arxiv.org/pdf/2210.03629",
+    "repository": "https://github.com/ysymyth/ReAct",
+    "group": "original",
+    "scope": "ALFWorld text subset; Docker and model API required"
+  },
+  {
+    "id": "knowtrans",
+    "title": "KnowTrans: Boosting Transferability of Data Preparation LLMs via Knowledge Augmentation",
+    "pdf": "https://raw.githubusercontent.com/A11en0/KnowTrans/main/KnowTrans-Full-Version.pdf",
+    "repository": "https://github.com/A11en0/KnowTrans",
+    "group": "original",
+    "scope": "Not recommended for this 2GB GPU: model weights and training resources required"
+  },
+  {
+    "id": "llava",
+    "title": "Visual Instruction Tuning",
+    "pdf": "https://arxiv.org/pdf/2304.08485",
+    "repository": "https://github.com/haotian-liu/LLaVA",
+    "group": "original",
+    "scope": "Not recommended for this 2GB GPU: multimodal weights and image data required"
+  },
+  {
+    "id": "multiagent-debate",
+    "title": "Improving Factuality and Reasoning in Language Models through Multiagent Debate",
+    "pdf": "https://arxiv.org/pdf/2305.14325",
+    "repository": "https://github.com/composable-models/llm_multiagent_debate",
+    "group": "added",
+    "priority": 1,
+    "scope": "Arithmetic task: two agents, three rounds, official seeded generated problems; API required"
+  },
+  {
+    "id": "self-refine",
+    "title": "Self-Refine: Iterative Refinement with Self-Feedback",
+    "pdf": "https://arxiv.org/pdf/2303.17651",
+    "repository": "https://github.com/madaan/self-refine",
+    "group": "added",
+    "priority": 2,
+    "scope": "Small GSM8K or generation-feedback-refinement subset; API and prompt-lib compatibility required; single-model iterative baseline"
+  },
+  {
+    "id": "tree-of-thoughts",
+    "title": "Tree of Thoughts: Deliberate Problem Solving with Large Language Models",
+    "pdf": "https://arxiv.org/pdf/2305.10601",
+    "repository": "https://github.com/princeton-nlp/tree-of-thought-llm",
+    "group": "added",
+    "priority": 3,
+    "scope": "Game24 data and historical logs included; fresh search requires API and more calls; search baseline rather than inherently multi-agent"
+  }
+]

@@ -1,0 +1,44 @@
+{
+  "paper_id": "b302ff1520",
+  "name": "Multiagent Debate",
+  "status": "completed",
+  "scope": "benchmark_subset",
+  "repository": "https://github.com/composable-models/llm_multiagent_debate",
+  "commit": "9846749350eb917ae5bfaaff4c645fc705b8d3af",
+  "metrics": [
+    {
+      "name": "official_final_accuracy_all_samples",
+      "value": 0.3,
+      "sample_count": 10,
+      "artifact": "debate_recovered.json",
+      "provenance": "artifacts/debate_recovered.json"
+    },
+    {
+      "name": "first_agent_initial_accuracy",
+      "value": 0.2,
+      "sample_count": 10,
+      "artifact": "debate_recovered.json",
+      "provenance": "artifacts/debate_recovered.json"
+    },
+    {
+      "name": "initial_majority_accuracy",
+      "value": 0.2,
+      "sample_count": 10,
+      "artifact": "debate_recovered.json",
+      "provenance": "artifacts/debate_recovered.json"
+    },
+    {
+      "name": "supplementary_format_audit_accuracy",
+      "value": 1.0,
+      "sample_count": 10,
+      "artifact": "debate_recovered.json",
+      "provenance": "artifacts/debate_recovered.json"
+    }
+  ],
+  "sample_count": 10,
+  "sample_scores": [],
+  "search_configuration": null,
+  "run": "reproduction-recovered-20261101-143806",
+  "full_paper_reproduced": false,
+  "provenance": "Summary of the team's saved 2026-11-01 run; not fresh inference on the viewer's machine."
+}
