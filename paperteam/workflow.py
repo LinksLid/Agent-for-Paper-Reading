@@ -153,7 +153,8 @@ def render_report(title, state, comparisons, questions, llm):
 
 
 def build_workflow(llm: LLM, root: Path, run_dir: Path, checkpointer=None,
-                   mode="verified", max_repairs=1, reproduce=False, samples=3, reproduction_backend="api", explain=False):
+                   mode="verified", max_repairs=1, reproduce=False, samples=3, reproduction_backend="api", explain=False,
+                   on_node_start=None):
     def ingest_node(state):
         papers = ingest([Path(p) for p in state["paths"]], root / ".cache/papers")
         return {"papers": papers, "events": event("ingest", papers=len(papers))}
@@ -274,7 +275,13 @@ def build_workflow(llm: LLM, root: Path, run_dir: Path, checkpointer=None,
     if after_verifier == "paper_explainer":
         selected.append("paper_explainer")
     for name in selected:
-        graph.add_node(name, nodes[name])
+        node = nodes[name]
+        if on_node_start is not None:
+            def observed(state, _name=name, _node=node):
+                on_node_start(_name)
+                return _node(state)
+            node = observed
+        graph.add_node(name, node)
     if after_verifier == "paper_explainer":
         graph.add_edge("paper_explainer", "reproducer")
     graph.add_edge(START, "ingest")

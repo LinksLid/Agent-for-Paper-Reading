@@ -4,3 +4,5 @@
 *.jpg binary
 *.jpeg binary
 *.sqlite binary
+*.bat text eol=crlf
+*.sh text eol=lf

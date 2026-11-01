@@ -80,3 +80,29 @@ def test_legacy_completion_can_return_length_limited_output(tmp_path):
     assert llm.chat("legacy", "hello", allow_truncated=True) == "partial action"
     assert llm.records[-1]["finish_reason"] == "length"
     llm.close()
+
+
+def test_tongji_reasoning_effort_uses_documented_parameter(tmp_path):
+    bodies = []
+    def handler(request):
+        bodies.append(json.loads(request.content))
+        return httpx.Response(200, json={"choices": [{"message": {"content": "OK"}, "finish_reason": "stop"}],
+                                        "usage": {"total_tokens": 3}})
+    llm = client(tmp_path, handler)
+    llm.settings = replace(llm.settings, provider="tongji", reasoning_effort="none")
+    llm.model = "DeepSeek-V4.1-Flash"
+    assert llm.chat("connection-check", "Reply OK") == "OK"
+    assert bodies[0]["model"] == "DeepSeek-V4.1-Flash"
+    assert bodies[0]["reasoning_effort"] == "none"
+    assert "thinking" not in bodies[0]
+    assert llm.records[-1]["reasoning_effort"] == "none"
+    llm.close()
+
+
+def test_reasoning_effort_loads_from_project_configuration(tmp_path, monkeypatch):
+    for key in ("OPENAI_BASE_URL", "BASE_URL", "OPENAI_API_KEY", "API_KEY", "MODEL", "OPENAI_MODEL", "Base_url", "REASONING_EFFORT"):
+        monkeypatch.delenv(key, raising=False)
+    (tmp_path / ".env").write_text("Base_url=https://agi.tongji.edu.cn/v1\nAPI_KEY=test-only\nMODEL=DeepSeek-V4.1-Flash\nREASONING_EFFORT=none\n", encoding="utf-8")
+    settings = Settings.load(tmp_path, provider="tongji")
+    assert settings.reasoning_effort == "none"
+    assert settings.model == "DeepSeek-V4.1-Flash"

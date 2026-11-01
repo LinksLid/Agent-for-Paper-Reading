@@ -1,0 +1,15 @@
+{
+  "paper_id": "3e7a28f698",
+  "name": "KnowTrans",
+  "status": "blocked",
+  "scope": "blocked",
+  "repository": "https://github.com/A11en0/KnowTrans",
+  "commit": "3d332e528c38ba20392952f4a7cec0f222ba2762",
+  "metrics": [],
+  "sample_count": null,
+  "sample_scores": [],
+  "search_configuration": null,
+  "run": "reproduction-20261101-142352-e02265",
+  "full_paper_reproduced": false,
+  "provenance": "Summary of the team's saved 2026-11-01 run; not fresh inference on the viewer's machine."
+}

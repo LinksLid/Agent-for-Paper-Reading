@@ -26,6 +26,7 @@ def ingest(paths: list[Path], cache_dir: Path) -> list[dict]:
         if cached.exists():
             paper = json.loads(cached.read_text(encoding="utf-8"))
             paper["path"] = str(path.resolve())
+            paper["filename"] = path.name
         else:
             reader = PdfReader(path)
             chunks = []

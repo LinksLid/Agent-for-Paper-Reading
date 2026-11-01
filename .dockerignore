@@ -1,0 +1,17 @@
+.git
+.venv
+.runtime
+.cache
+.idea
+.pytest_cache
+**/__pycache__
+.env
+.env.*
+*.env
+*.env.*
+output
+external
+paper
+dist
+release
+*.zip

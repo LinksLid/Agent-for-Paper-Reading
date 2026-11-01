@@ -42,7 +42,8 @@ def test_parallel_analysis_repair_and_sqlite_checkpoints(tmp_path, monkeypatch):
     client = FakeLLM()
     with sqlite3.connect(":memory:", check_same_thread=False) as connection:
         saver = SqliteSaver(connection)
-        graph = workflow.build_workflow(client, tmp_path, tmp_path, saver)
+        started=[]
+        graph = workflow.build_workflow(client, tmp_path, tmp_path, saver,on_node_start=started.append)
         config = {"configurable": {"thread_id": "test"}}
         result = graph.invoke({"paths": ["fixture.pdf"], "question": "test", "events": []}, config)
         assert len(result["accepted"]) == 2
@@ -53,6 +54,8 @@ def test_parallel_analysis_repair_and_sqlite_checkpoints(tmp_path, monkeypatch):
         assert any(e["node"] == "targeted_repair" for e in result["events"])
         assert graph.get_state(config).next == ()
         assert len(list(graph.get_state_history(config))) > 5
+        assert started[0]=='ingest' and started[-1]=='reporter'
+        assert started.count('verifier')==2 and 'targeted_repair' in started
 
 
 def test_unresolved_claim_excluded_when_repair_disabled(tmp_path, monkeypatch):

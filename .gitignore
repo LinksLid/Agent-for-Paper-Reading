@@ -4,6 +4,7 @@
 *.env.*
 !.env.example
 !deepseek.env.example
+!tongji.env.example
 .venv/
 .cache/
 __pycache__/
@@ -12,3 +13,13 @@ external/
 output/
 paper/*.pdf
 *.pyc
+
+.idea/
+
+.runtime/
+
+paper/sources.json
+
+# Public curated snapshot is tracked; private raw runs remain in output/.
+dist/
+release/

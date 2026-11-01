@@ -7,7 +7,7 @@ import zipfile
 import pytest
 
 from paperteam.repositories import repo_name, unpack_snapshot, inspect_repository
-from paperteam.experiment_runtime import safe_relative, patched_text, Broker
+from paperteam.experiment_runtime import safe_relative, patched_text, Broker, DockerRuntime
 from paperteam.repository_experiments import (ExperimentPlan, ExperimentCommand, extract_metrics,
                                                validate_plan, summarize, build_repository_workflow)
 
@@ -44,6 +44,42 @@ def test_notebook_compatibility_patches_keep_prior_changes():
     final = patched_text(first, ".ipynb", "print(limit)", "save_metric(limit)")
     text = "".join(json.loads(final)["cells"][0]["source"])
     assert "limit = 2" in text and "save_metric(limit)" in text
+
+
+@pytest.mark.parametrize("requested,expected", [(900,900), (5000,1800)])
+def test_runtime_honors_search_timeout_with_finite_upper_bound(tmp_path, monkeypatch, requested, expected):
+    runtime = DockerRuntime(tmp_path, tmp_path/'output', '3.11', None)
+    observed=[]
+    def host(argv, timeout=120):
+        observed.append(timeout)
+        return dict(exit_code=0, stdout='', stderr='', seconds=0)
+    monkeypatch.setattr(runtime,'_host',host)
+    runtime.command(['python','run.py'],timeout=requested)
+    assert observed == [expected+10]
+
+
+def test_command_deadline_keeps_container_available_for_collection(tmp_path, monkeypatch):
+    runtime = DockerRuntime(tmp_path, tmp_path/'output', '3.11', None)
+    commands=[]
+    def host(argv, timeout=120):
+        commands.append(argv)
+        return dict(exit_code=124, stdout='', stderr='', seconds=1)
+    monkeypatch.setattr(runtime,'_host',host)
+    result=runtime.command(['python','run.py'],timeout=900)
+    assert result['timed_out']
+    assert len(commands)==1
+    assert commands[0][-5:] == ['timeout','--kill-after=5s','900s','/tmp/venv/bin/python','run.py']
+
+
+def test_inspection_includes_nested_generation_entrypoint_and_model_adapter(tmp_path):
+    (tmp_path / "math").mkdir()
+    (tmp_path / "src/tot").mkdir(parents=True)
+    (tmp_path / "README.md").write_text("Run python math/gen_math.py", encoding="utf-8")
+    (tmp_path / "math/gen_math.py").write_text("evaluation_round = 100\n", encoding="utf-8")
+    (tmp_path / "src/tot/models.py").write_text("batch_size = 3\n", encoding="utf-8")
+    result = inspect_repository(tmp_path)
+    assert "evaluation_round = 100" in result["contents"]["math/gen_math.py"]
+    assert "batch_size = 3" in result["contents"]["src/tot/models.py"]
 
 
 @pytest.mark.parametrize("value", ["../key", "C:/Users/key", "/etc/passwd", ".env", "dir/.env", "dir\\file"])

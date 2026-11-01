@@ -1,0 +1,15 @@
+{
+  "paper_id": "6013e70647",
+  "name": "CHESS",
+  "status": "blocked",
+  "scope": "blocked",
+  "repository": "https://github.com/ShayanTalaei/CHESS",
+  "commit": "3d6e835f858d26885d21d4bc0215aeecf855efbe",
+  "metrics": [],
+  "sample_count": null,
+  "sample_scores": [],
+  "search_configuration": null,
+  "run": "reproduction-20261101-145420-f196dc",
+  "full_paper_reproduced": false,
+  "provenance": "Summary of the team's saved 2026-11-01 run; not fresh inference on the viewer's machine."
+}

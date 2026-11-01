@@ -1,0 +1,32 @@
+{
+  "paper_id": "41241a9870",
+  "name": "MAC-SQL",
+  "status": "completed",
+  "scope": "benchmark_subset",
+  "repository": "https://github.com/wbbeyourself/MAC-SQL",
+  "commit": "31a9df5e0d520be4769be57a4b9022e5e34a14f4",
+  "metrics": [
+    {
+      "name": "BIRD dev EX (6 samples)",
+      "artifact": "outputs/bird/eval_result_dev.json",
+      "json_path": "res",
+      "aggregate": "mean",
+      "value": 0.8333333333333334,
+      "sample_count": 6,
+      "provenance": "artifacts/outputs/bird/eval_result_dev.json"
+    }
+  ],
+  "sample_count": 6,
+  "sample_scores": [
+    1,
+    1,
+    1,
+    1,
+    0,
+    1
+  ],
+  "search_configuration": null,
+  "run": "reproduction-20261101-141911-211744",
+  "full_paper_reproduced": false,
+  "provenance": "Summary of the team's saved 2026-11-01 run; not fresh inference on the viewer's machine."
+}

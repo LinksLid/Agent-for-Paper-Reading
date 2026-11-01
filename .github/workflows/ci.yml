@@ -1,0 +1,35 @@
+name: Software and first-run checks
+on: [push, pull_request, workflow_dispatch]
+permissions:
+  contents: read
+jobs:
+  zero-dependency-website:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.12'
+      - name: Fresh clone starts without API keys, pip or output records
+        run: python -S scripts/smoke_release.py --root .
+      - name: Windows double-click entry
+        if: runner.os == 'Windows'
+        run: python -S scripts/smoke_release.py --root . --launcher bat
+      - name: POSIX shell entry
+        if: runner.os == 'Linux'
+        run: python -S scripts/smoke_release.py --root . --launcher sh
+  framework-tests:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python: ['3.11', '3.12']
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v7
+        with:
+          python-version: ${{ matrix.python }}
+      - run: python -m pip install -r requirements.txt
+      - run: python -m pytest -q

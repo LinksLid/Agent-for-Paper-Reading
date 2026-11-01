@@ -1,0 +1,51 @@
+{
+  "paper_id": "79c5237e3f",
+  "name": "Tree of Thoughts",
+  "status": "completed",
+  "scope": "benchmark_subset",
+  "repository": "https://github.com/princeton-nlp/tree-of-thought-llm",
+  "commit": "8050e67d0e3a0fddc424d7fa5801538722a4c4cc",
+  "metrics": [
+    {
+      "name": "tot_cnt_avg",
+      "artifact": "./logs/game24/gpt-4_0.7_propose1_value1_greedy1_start900_end902_summary.json",
+      "json_path": "cnt_avg",
+      "aggregate": null,
+      "value": 0.0,
+      "provenance": "artifacts/logs/game24/gpt-4_0.7_propose1_value1_greedy1_start900_end902_summary.json"
+    },
+    {
+      "name": "tot_cnt_any",
+      "artifact": "./logs/game24/gpt-4_0.7_propose1_value1_greedy1_start900_end902_summary.json",
+      "json_path": "cnt_any",
+      "aggregate": null,
+      "value": 0.0,
+      "provenance": "artifacts/logs/game24/gpt-4_0.7_propose1_value1_greedy1_start900_end902_summary.json"
+    },
+    {
+      "name": "naive_cot_cnt_avg",
+      "artifact": "./logs/game24/gpt-4_0.7_naive_cot_sample_1_start900_end902_summary.json",
+      "json_path": "cnt_avg",
+      "aggregate": null,
+      "value": 0.0,
+      "provenance": "artifacts/logs/game24/gpt-4_0.7_naive_cot_sample_1_start900_end902_summary.json"
+    },
+    {
+      "name": "naive_cot_cnt_any",
+      "artifact": "./logs/game24/gpt-4_0.7_naive_cot_sample_1_start900_end902_summary.json",
+      "json_path": "cnt_any",
+      "aggregate": null,
+      "value": 0.0,
+      "provenance": "artifacts/logs/game24/gpt-4_0.7_naive_cot_sample_1_start900_end902_summary.json"
+    }
+  ],
+  "sample_count": 2,
+  "sample_scores": [
+    0,
+    0
+  ],
+  "search_configuration": "propose1/value1/greedy1",
+  "run": "reproduction-resumed-20261101-151902-5ed116",
+  "full_paper_reproduced": false,
+  "provenance": "Summary of the team's saved 2026-11-01 run; not fresh inference on the viewer's machine."
+}
