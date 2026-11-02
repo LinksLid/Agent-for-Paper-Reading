@@ -4,7 +4,7 @@
   <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="theme-color" content="#f4f6fb"><meta name="description" content="PaperTeam 多智能体论文阅读、证据核验与实验复现展示平台。">
   <title>PaperTeam · 研究协作控制台</title>
-  <link rel="icon" href="assets/logo.svg" type="image/svg+xml"><link rel="stylesheet" href="assets/app.css">
+  <link rel="icon" href="assets/logo.svg" type="image/svg+xml"><link rel="stylesheet" href="assets/app.css?v=20261102-no-course">
   <link rel="stylesheet" href="assets/reader.css">
 </head>
 <body>
@@ -14,19 +14,18 @@
     <a class="brand" href="#read"><img src="assets/logo.svg" alt="" width="34" height="34"><span>PaperTeam<small>多智能体研究空间</small></span></a>
     <div class="workspace-label">WORKSPACE <span>01</span></div>
     <nav aria-label="主导航" id="nav"></nav>
-    <div class="sidebar-note"><span class="tiny-label">为课堂展示而准备</span><h3>让研究过程<br>也成为研究成果。</h3><p>原文、推理与实验，<br>在同一条证据链上。</p><button class="text-link" data-action="present">进入汇报模式 <span>↗</span></button></div>
+    <div class="sidebar-note"><span class="tiny-label">研究阅读工作台</span><h3>让研究过程<br>也成为研究成果。</h3><p>原文、推理与实验，<br>在同一条证据链上。</p></div>
     <a class="workbench-link" href="http://127.0.0.1:8501" target="_blank" rel="noopener"><span data-icon="terminal"></span> 打开原工作台 <span>↗</span></a>
     <div class="sidebar-status"><span class="status-dot"></span><div>论文阅读环境<small>LangGraph · 真实阅读</small></div><span class="version">v0.3</span></div>
   </aside>
   <div class="app-shell">
-    <header class="topbar"><div class="breadcrumb"><button class="icon-button mobile-menu" data-action="menu" aria-label="展开导航" aria-controls="sidebar" aria-expanded="false"><span data-icon="menu"></span></button><span>研究空间</span><span class="crumb-slash">/</span><strong id="breadcrumb">项目总览</strong></div><div class="top-actions"><span class="local-badge"><span class="status-dot"></span>本地运行</span><button class="icon-button" data-action="refresh" title="刷新保存的数据，不发起模型调用" aria-label="刷新保存的数据"><span data-icon="refresh"></span></button><button class="button dark small" data-action="present"><span data-icon="present"></span>课堂汇报</button></div></header>
+    <header class="topbar"><div class="breadcrumb"><button class="icon-button mobile-menu" data-action="menu" aria-label="展开导航" aria-controls="sidebar" aria-expanded="false"><span data-icon="menu"></span></button><span>研究空间</span><span class="crumb-slash">/</span><strong id="breadcrumb">项目总览</strong></div><div class="top-actions"><span class="local-badge"><span class="status-dot"></span>本地运行</span><button class="icon-button" data-action="refresh" title="刷新保存的数据，不发起模型调用" aria-label="刷新保存的数据"><span data-icon="refresh"></span></button></div></header>
     <main id="main" tabindex="-1"><div class="loading"><span class="spinner"></span><h2>正在读取研究记录</h2><p>连接论文、结论与实验依据…</p></div></main>
     <footer class="page-footer"><span>PaperTeam <i>·</i> 每一个结论，都有来处。</span><span id="footer-meta">保存的真实运行记录</span></footer>
   </div>
   <dialog id="detail-dialog"><div class="dialog-head"><div id="dialog-label"></div><button class="icon-button" data-action="close-dialog" aria-label="关闭详情"><span data-icon="close"></span></button></div><div id="dialog-body"></div></dialog>
-  <div id="presentation" class="presentation" hidden role="dialog" aria-label="课堂汇报模式" aria-modal="true"><header><a class="presentation-brand" href="#overview"><img src="assets/logo.svg" alt="" width="32">PaperTeam</a><span id="slide-counter"></span><button class="icon-button" data-action="exit-present" aria-label="退出汇报"><span data-icon="close"></span></button></header><div id="slide-content"></div><footer><span>← → 切换页面 <i>·</i> Esc 退出</span><div><button class="button subtle" data-action="prev-slide">← 上一页</button><button class="button primary" data-action="next-slide">下一页 →</button></div></footer></div>
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
   <link rel="stylesheet" href="assets/selection-qa.css">
-  <script src="assets/selection-qa.js"></script><script src="assets/reader.js"></script><script src="data/snapshot.js"></script><script src="assets/app.js"></script>
+  <script src="assets/selection-qa.js"></script><script src="assets/reader.js"></script><script src="data/snapshot.js"></script><script src="assets/app.js?v=20261102-no-course"></script>
 </body>
 </html>
