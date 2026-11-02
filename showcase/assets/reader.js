@@ -153,5 +153,5 @@
     api('runtime').then(r=>{state.runtime=r;updateRuntime();}).catch(()=>{state.runtime=null;updateRuntime();});
     history();if(state.job?.id)poll();else if(savedId)selectJob(savedId);
   }
-  window.PaperTeamReader={page,mount};
+  window.PaperTeamReader={page,mount,markdown};
 })();

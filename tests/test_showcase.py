@@ -8,7 +8,7 @@ from urllib.request import urlopen
 
 import pytest
 
-from paperteam.showcase import READING, ShowcaseHandler, build_data, export_snapshot
+from paperteam.showcase import READING, ShowcaseHandler, build_data, export_snapshot, saved_reports, saved_report
 
 
 def save(path, value):
@@ -49,6 +49,20 @@ def test_missing_runs_do_not_create_demonstration_statistics(tmp_path):
     assert data['claims']==data['timeline']==data['results']==[]
 
 
+def test_saved_reports_include_runs_without_web_jobs_and_reject_unsafe_paths(tmp_path):
+    older=tmp_path/'output/reading-older';older.mkdir(parents=True)
+    (older/'report.md').write_text('# Older',encoding='utf-8')
+    current=tmp_path/'output/reading-new';current.mkdir(parents=True)
+    (current/'report.md').write_text('# New report',encoding='utf-8')
+    save(current/'manifest.json',dict(question='Read this paper',model='test-model',papers=[dict(filename='paper.pdf')],api_key='secret'))
+    reports=saved_reports(tmp_path)
+    assert [r['id'] for r in reports]==['reading-new','reading-older']
+    assert reports[0]['papers']==['paper.pdf']
+    assert 'secret' not in json.dumps(reports)
+    assert saved_report(tmp_path,'reading-new')['report']=='# New report'
+    with pytest.raises(FileNotFoundError):saved_report(tmp_path,'../reading-new')
+
+
 def test_offline_snapshot_escapes_script_delimiters(recorded_project):
     path=recorded_project/READING/'state.json'
     state=json.loads(path.read_text(encoding='utf-8'))
@@ -78,6 +92,16 @@ def test_presentation_api_serves_evidence_and_registered_artifacts(presentation_
         assert json.load(response)['stats']['accepted']==1
     with urlopen(presentation_server+'/artifacts/paper/eval_result.json') as response:
         assert [x['res'] for x in json.load(response)]==[1,0]
+
+
+def test_presentation_api_lists_and_reads_saved_reports(presentation_server, recorded_project):
+    run=recorded_project/'output/saved-reading'
+    run.mkdir()
+    (run/'report.md').write_text('# Historical report',encoding='utf-8')
+    with urlopen(presentation_server+'/api/reports') as response:
+        assert 'saved-reading' in [r['id'] for r in json.load(response)['reports']]
+    with urlopen(presentation_server+'/api/reports/saved-reading') as response:
+        assert json.load(response)['report']=='# Historical report'
 
 
 @pytest.mark.parametrize('path',['/.env','/../.env','/%2e%2e/.env','/downloads/../../.env','/artifacts/paper/unknown.json'])
