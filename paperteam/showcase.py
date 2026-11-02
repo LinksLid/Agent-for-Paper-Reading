@@ -10,6 +10,7 @@ import argparse
 import hashlib
 import json
 import mimetypes
+import re
 import xml.etree.ElementTree as ET
 import threading
 import webbrowser
@@ -235,6 +236,36 @@ def allowed_downloads(root=ROOT):
     return mapping
 
 
+def saved_reports(root=ROOT):
+    """List readable reports directly from output, including runs without web jobs."""
+    output=(Path(root)/'output').resolve()
+    if not output.is_dir():return []
+    reports=[]
+    for folder in output.iterdir():
+        if not folder.is_dir() or not re.fullmatch(r'[\w.-]+',folder.name):continue
+        report=(folder/'report.md').resolve()
+        if not report.is_relative_to(folder.resolve()) or not report.is_file():continue
+        manifest=read_json(folder/'manifest.json')
+        papers=manifest.get('papers') or []
+        reports.append(dict(id=folder.name,created_at=report.stat().st_mtime,
+                            question=manifest.get('question',''),model=manifest.get('model',''),
+                            papers=[p.get('filename','') for p in papers if isinstance(p,dict)]))
+    return sorted(reports,key=lambda x:x['created_at'],reverse=True)
+
+
+def saved_report(root,run_id):
+    if not re.fullmatch(r'[\w.-]+',run_id) or run_id in {'.','..'}:raise FileNotFoundError()
+    output=(Path(root)/'output').resolve()
+    folder=(output/run_id).resolve()
+    report=(folder/'report.md').resolve()
+    if not folder.is_relative_to(output) or not report.is_relative_to(folder) or not report.is_file():
+        raise FileNotFoundError()
+    if report.stat().st_size>5_000_000:raise ValueError('报告文件过大，无法在页面展示。')
+    meta=next((r for r in saved_reports(root) if r['id']==run_id),None)
+    if meta is None:raise FileNotFoundError()
+    return dict(meta,report=report.read_text(encoding='utf-8-sig'))
+
+
 class ShowcaseHandler(SimpleHTTPRequestHandler):
     def __init__(self,*args,root=ROOT,site=SITE,mode='auto',**kwargs):
         self.project_root=Path(root)
@@ -274,6 +305,12 @@ class ShowcaseHandler(SimpleHTTPRequestHandler):
             self.json_response(dict(app='PaperTeam',version=2));return
         if path=='/api/runtime':
             self.json_response(self.jobs.runtime());return
+        if path=='/api/reports':
+            self.json_response(dict(reports=saved_reports(self.project_root)));return
+        if path.startswith('/api/reports/'):
+            parts=path.strip('/').split('/')
+            if len(parts)==3:
+                self.json_response(saved_report(self.project_root,parts[2]));return
         if path=='/api/jobs':
             self.json_response(dict(jobs=self.jobs.list_jobs()));return
         parts=path.strip('/').split('/')
