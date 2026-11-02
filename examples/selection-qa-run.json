@@ -1,0 +1,37 @@
+{
+  "date": "2026-11-02",
+  "feature": "selection-question-answering",
+  "model": "DeepSeek-V4.1-Flash",
+  "software_tests_passed": 122,
+  "checks": [
+    "真实鼠标划词出现浮动按钮",
+    "选文解释及原文页码",
+    "基于同一选文继续追问",
+    "浏览器刷新恢复",
+    "服务重启恢复",
+    "报告版本及选文归属校验",
+    "未通过核验的事实隐藏"
+  ],
+  "questions": [
+    {
+      "question": "只解释数据库模式，举一个表名和列名的简单例子，再简单一点。",
+      "parent_question": true,
+      "status": "completed",
+      "calls": 4,
+      "total_tokens": 8743,
+      "verified_points": 3,
+      "teaching_example": true
+    },
+    {
+      "question": "请用通俗的话解释这段内容，并说明它在本文中的作用。",
+      "parent_question": false,
+      "status": "completed",
+      "calls": 6,
+      "total_tokens": 15480,
+      "verified_points": 3,
+      "teaching_example": true
+    }
+  ],
+  "reading_rerun": false,
+  "repository_experiments_rerun": false
+}
