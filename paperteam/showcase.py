@@ -259,6 +259,15 @@ class ShowcaseHandler(SimpleHTTPRequestHandler):
         self.send_header('Content-Length',str(len(raw)))
         self.end_headers();self.wfile.write(raw)
 
+    @property
+    def questions(self):
+        from .selection_qa import QuestionService
+        from .web_jobs import LOCK
+        with LOCK:
+            if not hasattr(self.server, 'question_service'):
+                self.server.question_service = QuestionService(self.jobs)
+        return self.server.question_service
+
     def api_get(self,path):
         from .web_jobs import identifier, read
         if path=='/api/health':
@@ -268,6 +277,9 @@ class ShowcaseHandler(SimpleHTTPRequestHandler):
         if path=='/api/jobs':
             self.json_response(dict(jobs=self.jobs.list_jobs()));return
         parts=path.strip('/').split('/')
+        if len(parts) in {4,5} and parts[:2]==['api','jobs'] and parts[3]=='questions':
+            self.json_response(dict(questions=self.questions.list(parts[2])) if len(parts)==4 else
+                               self.questions.get(parts[2],parts[4]));return
         if len(parts) in {3,4} and parts[:2]==['api','jobs']:
             job=self.jobs.get(parts[2],report=len(parts)==4)
             if len(parts)==3 or parts[3]=='result':
@@ -339,6 +351,8 @@ class ShowcaseHandler(SimpleHTTPRequestHandler):
             if path=='/api/jobs':
                 self.json_response(self.jobs.start(data),202);return
             parts=path.strip('/').split('/')
+            if len(parts)==4 and parts[:2]==['api','jobs'] and parts[3]=='questions':
+                self.json_response(self.questions.start(parts[2],data),202);return
             if len(parts)==4 and parts[:2]==['api','jobs'] and parts[3]=='stop':
                 self.json_response(self.jobs.stop(parts[2]));return
             self.json_response(dict(error='接口不存在。'),404)
