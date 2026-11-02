@@ -244,6 +244,8 @@ class JobService:
                 dict(quote=e['quote'], page=chunks.get(e['chunk_id'], {}).get('page'), chunk_id=e['chunk_id'])
                 for e in c.get('evidence', [])]} for c in state.get('accepted', [])]
             job['papers'] = [{k: p.get(k) for k in ['filename', 'paper_id', 'pages']} for p in state.get('papers', [])]
+            from .selection_qa import anchors
+            job['selection_index'] = anchors(job['report'], state)
             manifest = read(run / 'manifest.json')
             job['summary'] = {k: manifest.get(k) for k in ['model', 'seconds', 'accepted_claims',
                                                       'rejected_claims', 'review_rounds']}
